@@ -4478,14 +4478,16 @@ cd arpa
 # Start new app
 python manage.py startapp bienesyrentas
 
+
 # Create bienesyrentas views.py
 @"
 from django.shortcuts import render
 from django.http import HttpResponse
 
 def bienesyrentas(request):
-    return HttpResponse("Hello world!")
+    return render(request, 'bienesyrentas.html')
 "@ | Out-File -FilePath "bienesyrentas/views.py" -Encoding utf8
+
 
 # Create bienesyrentas urls.py
 @"
@@ -4497,6 +4499,7 @@ urlpatterns = [
     path('bienesyrentas/', views.bienesyrentas, name='bienesyrentas'),
 ]
 "@ | Out-File -FilePath "bienesyrentas/urls.py" -Encoding utf8
+
 
 # Create arpa urls.py
 @"
@@ -4510,7 +4513,143 @@ urlpatterns = [
 ]
 "@ | Out-File -FilePath "arpa/urls.py" -Encoding utf8
 
-#python manage.py runserver
+
+# create directory
+Write-Host "🏗️ Creating directory structure" -ForegroundColor $YELLOW
+$directories = @(
+    "bienesyrentas/templates"
+)
+foreach ($dir in $directories) {
+    New-Item -Path $dir -ItemType Directory -Force
+}
+
+
+# Create bienesyrentas.html
+@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A R P A</title>
+    <link rel="stylesheet" href="static/style.css">
+    <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+</head>
+<body>
+    <!--Logo and name-->
+    <div class="topnav-container">
+        <div class="logoIN"></div>
+        <div class="nomPag">A R P A</div>
+    </div>
+    
+    <!--Tabs for the pages-->
+    <div class="tab-container">
+        <button class="tab active" data-tab="bienes-rentas">Bienes y Rentas</button>
+        <!--<button class="tab" data-tab="transactions">Extractos</button>-->
+    </div>
+
+    <!--Upload buttons-->
+    <div id="bienes-rentas" class="tab-content active">
+        <div class="filter-form">
+            <label for="excelUpload" class="file-upload-label">
+              <span class="file-upload-button">Cargar archivo Excel</span>
+              <input type="file"
+                     id="excelUpload"
+                     accept=".xlsx,.xls"
+                     aria-describedby="fileUploadHelp"
+                     class="file-upload-input">
+            </label>
+            <span id="fileUploadStatus" aria-live="polite" class="file-upload-status"></span>
+    
+                <div id="passwordContainer" style="display: none;">
+                    <div style="display: flex; gap: 15px; width: 100%;">
+                        <div class="password-input-group" style="flex: 1;">
+                            <input type="password"
+                                id="excelOpenPassword"
+                                placeholder="Contraseña de apertura"
+                                class="password-input">
+                            <span class="toggle-password" onclick="togglePassword('excelOpenPassword')">👁️ </span>
+                        </div>
+                        <div class="password-input-group" style="flex: 1;">
+                            <input type="password"
+                                id="excelModifyPassword"
+                                placeholder="Contraseña de modificación"
+                                class="password-input">
+                            <span class="toggle-password" onclick="togglePassword('excelModifyPassword')">👁️ </span>
+                        </div><button id="analyzeButton">Analizar Archivo</button>
+                    </div>
+                </div>
+    
+    
+                <button onclick="exportToExcel()" style="margin-left: auto; background-color:rgb(0, 176, 15);" class="fa fa-file-excel-o"> Exportar a Excel</button>
+                <button onclick="exportFrozenColumnsToExcel()" style="background-color:rgb(0, 176, 15);" class="fa fa-file-excel-o"> Exportar columnas congeladas</button>
+            <div id="passwordError" class="error-message"></div>
+        </div>
+    </div>
+    <div id="loadingBarContainer" style="display: none;">
+        <div id="loadingBar"></div>
+        <div id="loadingText">Analizando archivo...</div>
+    </div>
+"@ | Out-File -FilePath "bienesyrentas/templates/bienesyrentas.html" -Encoding utf8
+
+
+# Change Settings, telling django a new app is created
+# Path to the Django settings file
+$settingsFilePath = ".\arpa\settings.py"  # Adjust this path if needed
+
+# String to insert
+$stringToInsert = "    'bienesyrentas'"
+
+# Line number to insert after (line 39 in your example, but be robust in case the file changes!) 
+$lineNumberToInsertAfter = 39
+
+
+# Read the file content
+$fileContent = Get-Content -Path $settingsFilePath
+
+# Check if the string already exists to avoid duplicates.  Crucial!
+if ($fileContent -notcontains $stringToInsert) {
+
+    # Insert the string after the specified line.
+    $newFileContent = @() # Start with an empty array
+    for ($i = 0; $i -lt $fileContent.Count; $i++) {
+        $newFileContent += $fileContent[$i] # Add the current line
+
+        # Insert after the desired line number (robust approach)
+        if ($i -eq ($lineNumberToInsertAfter - 1)) { # Powershell arrays are zero-based!
+            $newFileContent += $stringToInsert
+        }
+    }
+
+    # Write the modified content back to the file.
+    $newFileContent | Set-Content -Path $settingsFilePath
+
+    Write-Host "String '$stringToInsert' inserted into '$settingsFilePath' after line $lineNumberToInsertAfter."
+} else {
+    Write-Host "String '$stringToInsert' already exists in '$settingsFilePath'. No changes made."
+}
+
+python manage.py migrate
+
+
+# Create models.py
+@"
+from django.db import models
+
+class Bienesyrentas(models.Model):
+  firstname = models.CharField(max_length=255)
+  lastname = models.CharField(max_length=255)
+"@ | Out-File -FilePath "bienesyrentas/models.py" -Encoding utf8
+
+python manage.py makemigrations bienesyrentas
+python manage.py migrate
+python manage.py sqlmigrate bienesyrentas 0001
+
+# Start the server
+python manage.py runserver
 
 }
 
@@ -4545,7 +4684,7 @@ function main {
     
     migratoDjango
     cd ..
-    python app.py
+    #python app.py
 
 }
 

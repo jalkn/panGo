@@ -1,6 +1,6 @@
-# r u n G O
+# p a n G O
 
-Software to analyze a financial historical data.
+Dajngo framework to analyze a financial historical data.
 
 ## 1. Preparation
 
@@ -15,7 +15,7 @@ Execute the main script `run.ps1`. This script installs the dependencies, create
 1. Run the script in the terminal:
 
 ```
-python app.py
+python manage.py runserver
 ```
 2. Load the excel file by clicking on "Load Excel File", enter the password, and generate the table by clicking "Analyze File". The browser will display the data.
 
