@@ -4476,29 +4476,48 @@ django-admin startproject arpa
 cd arpa
 
 # Start new app
-python manage.py startapp bienesyrentas
+python manage.py startapp persons
 
 
-# Create bienesyrentas views.py
+# Create persons views.py
 @"
-from django.shortcuts import render
 from django.http import HttpResponse
+from django.template import loader
+from .models import Member
 
-def bienesyrentas(request):
-    return render(request, 'bienesyrentas.html')
-"@ | Out-File -FilePath "bienesyrentas/views.py" -Encoding utf8
+def members(request):
+  mymembers = Member.objects.all().values()
+  template = loader.get_template('all_members.html')
+  context = {
+    'mymembers': mymembers,
+  }
+  return HttpResponse(template.render(context, request))
+  
+def details(request, id):
+  mymember = Member.objects.get(id=id)
+  template = loader.get_template('details.html')
+  context = {
+    'mymember': mymember,
+  }
+  return HttpResponse(template.render(context, request))
+  
+def main(request):
+  template = loader.get_template('main.html')
+  return HttpResponse(template.render())
+"@ | Out-File -FilePath "persons/views.py" -Encoding utf8
 
 
-# Create bienesyrentas urls.py
+# Create persons urls.py
 @"
 from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.bienesyrentas, name='home'),  # Add this line for root path
-    path('bienesyrentas/', views.bienesyrentas, name='bienesyrentas'),
+    path('', views.main, name='main'),
+    path('members/', views.members, name='members'),
+    path('members/details/<int:id>', views.details, name='details'),
 ]
-"@ | Out-File -FilePath "bienesyrentas/urls.py" -Encoding utf8
+"@ | Out-File -FilePath "persons/urls.py" -Encoding utf8
 
 
 # Create arpa urls.py
@@ -4507,9 +4526,9 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
-    path('bienesyrentas/', include('bienesyrentas.urls')),
+    path('persons/', include('persons.urls')),
     path('admin/', admin.site.urls),
-    path('', include('bienesyrentas.urls')), 
+    path('', include('persons.urls')), 
 ]
 "@ | Out-File -FilePath "arpa/urls.py" -Encoding utf8
 
@@ -4517,83 +4536,123 @@ urlpatterns = [
 # create directory
 Write-Host "🏗️ Creating directory structure" -ForegroundColor $YELLOW
 $directories = @(
-    "bienesyrentas/templates"
+    "persons/templates"
 )
 foreach ($dir in $directories) {
     New-Item -Path $dir -ItemType Directory -Force
 }
 
 
-# Create bienesyrentas.html
+# Create master.html
 @"
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A R P A</title>
-    <link rel="stylesheet" href="static/style.css">
-    <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <title>{% block title %}{% endblock %}</title>
 </head>
 <body>
-    <!--Logo and name-->
-    <div class="topnav-container">
-        <div class="logoIN"></div>
-        <div class="nomPag">A R P A</div>
-    </div>
-    
-    <!--Tabs for the pages-->
-    <div class="tab-container">
-        <button class="tab active" data-tab="bienes-rentas">Bienes y Rentas</button>
-        <!--<button class="tab" data-tab="transactions">Extractos</button>-->
-    </div>
 
-    <!--Upload buttons-->
-    <div id="bienes-rentas" class="tab-content active">
-        <div class="filter-form">
-            <label for="excelUpload" class="file-upload-label">
-              <span class="file-upload-button">Cargar archivo Excel</span>
-              <input type="file"
-                     id="excelUpload"
-                     accept=".xlsx,.xls"
-                     aria-describedby="fileUploadHelp"
-                     class="file-upload-input">
-            </label>
-            <span id="fileUploadStatus" aria-live="polite" class="file-upload-status"></span>
-    
-                <div id="passwordContainer" style="display: none;">
-                    <div style="display: flex; gap: 15px; width: 100%;">
-                        <div class="password-input-group" style="flex: 1;">
-                            <input type="password"
-                                id="excelOpenPassword"
-                                placeholder="Contraseña de apertura"
-                                class="password-input">
-                            <span class="toggle-password" onclick="togglePassword('excelOpenPassword')">👁️ </span>
-                        </div>
-                        <div class="password-input-group" style="flex: 1;">
-                            <input type="password"
-                                id="excelModifyPassword"
-                                placeholder="Contraseña de modificación"
-                                class="password-input">
-                            <span class="toggle-password" onclick="togglePassword('excelModifyPassword')">👁️ </span>
-                        </div><button id="analyzeButton">Analizar Archivo</button>
-                    </div>
-                </div>
-    
-    
-                <button onclick="exportToExcel()" style="margin-left: auto; background-color:rgb(0, 176, 15);" class="fa fa-file-excel-o"> Exportar a Excel</button>
-                <button onclick="exportFrozenColumnsToExcel()" style="background-color:rgb(0, 176, 15);" class="fa fa-file-excel-o"> Exportar columnas congeladas</button>
-            <div id="passwordError" class="error-message"></div>
-        </div>
-    </div>
-    <div id="loadingBarContainer" style="display: none;">
-        <div id="loadingBar"></div>
-        <div id="loadingText">Analizando archivo...</div>
-    </div>
-"@ | Out-File -FilePath "bienesyrentas/templates/bienesyrentas.html" -Encoding utf8
+{% block content %}
+{% endblock %}
+
+</body>
+</html>
+"@ | Out-File -FilePath "persons/templates/master.html" -Encoding utf8
+
+
+# Create main.html
+@"
+{% extends "master.html" %}
+
+{% block title %}
+  My Tennis Club
+{% endblock %}
+
+
+{% block content %}
+  <h1>My Tennis Club</h1>
+
+  <h3>Members</h3>
+  
+  <p>Check out all our <a href="members/">members</a></p>
+  
+{% endblock %}
+"@ | Out-File -FilePath "persons/templates/main.html" -Encoding utf8
+
+
+# Create persons.html
+@"
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Welcome to</h1>
+<p>A R P A</p>
+
+</body>
+</html>
+"@ | Out-File -FilePath "persons/templates/persons.html" -Encoding utf8
+
+
+# Create all persons.html
+@"
+{% extends "master.html" %}
+
+{% block title %}
+  My Tennis Club - List of all members
+{% endblock %}
+
+
+{% block content %}
+
+  <p><a href="/">HOME</a></p>
+
+  <h1>Members</h1>
+  
+  <ul>
+    {% for x in mymembers %}
+      <li><a href="details/{{ x.id }}">{{ x.firstname }} {{ x.lastname }}</a></li>
+    {% endfor %}
+  </ul>
+{% endblock %}
+"@ | Out-File -FilePath "persons/templates/all_persons.html" -Encoding utf8
+
+
+# Create details.html
+@"
+{% extends "master.html" %}
+
+{% block title %}
+  Details about {{ mymember.firstname }} {{ mymember.lastname }}
+{% endblock %}
+
+
+{% block content %}
+  <h1>{{ mymember.firstname }} {{ mymember.lastname }}</h1>
+  
+  <p>Phone {{ mymember.phone }}</p>
+  <p>Member since: {{ mymember.joined_date }}</p>
+  
+  <p>Back to <a href="/members">Members</a></p>
+  
+{% endblock %}
+"@ | Out-File -FilePath "persons/templates/details.html" -Encoding utf8
+
+
+# Create 404.html
+@"
+<!DOCTYPE html>
+<html>
+<title>Wrong address</title>
+<body>
+
+<h1>Ooops!</h1>
+
+<h2>I cannot find the file you requested!</h2>
+
+</body>
+</html>
+"@ | Out-File -FilePath "persons/templates/404.html" -Encoding utf8
 
 
 # Change Settings, telling django a new app is created
@@ -4601,7 +4660,7 @@ foreach ($dir in $directories) {
 $settingsFilePath = ".\arpa\settings.py"  # Adjust this path if needed
 
 # String to insert
-$stringToInsert = "    'bienesyrentas'"
+$stringToInsert = "    'persons'"
 
 # Line number to insert after (line 39 in your example, but be robust in case the file changes!) 
 $lineNumberToInsertAfter = 39
@@ -4639,14 +4698,16 @@ python manage.py migrate
 @"
 from django.db import models
 
-class Bienesyrentas(models.Model):
+class Person(models.Model):
   firstname = models.CharField(max_length=255)
   lastname = models.CharField(max_length=255)
-"@ | Out-File -FilePath "bienesyrentas/models.py" -Encoding utf8
+  phone = models.IntegerField(null=True)
+  joined_date = models.DateField(null=True)
+"@ | Out-File -FilePath "persons/models.py" -Encoding utf8
 
-python manage.py makemigrations bienesyrentas
+python manage.py makemigrations persons
 python manage.py migrate
-python manage.py sqlmigrate bienesyrentas 0001
+python manage.py sqlmigrate persons 0001
 
 # Start the server
 python manage.py runserver
