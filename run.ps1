@@ -4483,21 +4483,21 @@ python manage.py startapp persons
 @"
 from django.http import HttpResponse
 from django.template import loader
-from .models import Member
+from .models import Person
 
-def members(request):
-  mymembers = Member.objects.all().values()
-  template = loader.get_template('all_members.html')
+def persons(request):
+  mypersons = Person.objects.all().values()
+  template = loader.get_template('all_persons.html')
   context = {
-    'mymembers': mymembers,
+    'mypersons': mypersons,
   }
   return HttpResponse(template.render(context, request))
   
 def details(request, id):
-  mymember = Member.objects.get(id=id)
+  myperson = Person.objects.get(id=id)
   template = loader.get_template('details.html')
   context = {
-    'mymember': mymember,
+    'myperson': myperson,
   }
   return HttpResponse(template.render(context, request))
   
@@ -4514,10 +4514,23 @@ from . import views
 
 urlpatterns = [
     path('', views.main, name='main'),
-    path('members/', views.members, name='members'),
-    path('members/details/<int:id>', views.details, name='details'),
+    path('persons/', views.persons, name='persons'),
+    path('persons/details/<int:id>', views.details, name='details'),
 ]
 "@ | Out-File -FilePath "persons/urls.py" -Encoding utf8
+
+# Create persons model admin.py
+@"
+from django.contrib import admin
+from .models import Person
+
+# Register your persons here.
+
+class PersonAdmin(admin.ModelAdmin):
+  list_display = ("firstname", "lastname", "joined_date",)
+  
+admin.site.register(Person, PersonAdmin)
+"@ | Out-File -FilePath "persons/admin.py" -Encoding utf8
 
 
 # Create arpa urls.py
@@ -4565,16 +4578,16 @@ foreach ($dir in $directories) {
 {% extends "master.html" %}
 
 {% block title %}
-  My Tennis Club
+  A R P A
 {% endblock %}
 
 
 {% block content %}
-  <h1>My Tennis Club</h1>
+  <h1>A R P A</h1>
 
-  <h3>Members</h3>
+  <h3>Persons</h3>
   
-  <p>Check out all our <a href="members/">members</a></p>
+  <p>Check out all our <a href="persons/">persons</a></p>
   
 {% endblock %}
 "@ | Out-File -FilePath "persons/templates/main.html" -Encoding utf8
@@ -4599,7 +4612,7 @@ foreach ($dir in $directories) {
 {% extends "master.html" %}
 
 {% block title %}
-  My Tennis Club - List of all members
+  A R P A - List of all persons
 {% endblock %}
 
 
@@ -4607,10 +4620,10 @@ foreach ($dir in $directories) {
 
   <p><a href="/">HOME</a></p>
 
-  <h1>Members</h1>
+  <h1>Persons</h1>
   
   <ul>
-    {% for x in mymembers %}
+    {% for x in mypersons %}
       <li><a href="details/{{ x.id }}">{{ x.firstname }} {{ x.lastname }}</a></li>
     {% endfor %}
   </ul>
@@ -4623,17 +4636,17 @@ foreach ($dir in $directories) {
 {% extends "master.html" %}
 
 {% block title %}
-  Details about {{ mymember.firstname }} {{ mymember.lastname }}
+  Details about {{ myperson.firstname }} {{ myperson.lastname }}
 {% endblock %}
 
 
 {% block content %}
-  <h1>{{ mymember.firstname }} {{ mymember.lastname }}</h1>
+  <h1>{{ myperson.firstname }} {{ myperson.lastname }}</h1>
   
-  <p>Phone {{ mymember.phone }}</p>
-  <p>Member since: {{ mymember.joined_date }}</p>
+  <p>Phone {{ myperson.phone }}</p>
+  <p>Person since: {{ myperson.joined_date }}</p>
   
-  <p>Back to <a href="/members">Members</a></p>
+  <p>Back to <a href="/persons">Persons</a></p>
   
 {% endblock %}
 "@ | Out-File -FilePath "persons/templates/details.html" -Encoding utf8
@@ -4703,14 +4716,22 @@ class Person(models.Model):
   lastname = models.CharField(max_length=255)
   phone = models.IntegerField(null=True)
   joined_date = models.DateField(null=True)
+
+  def __str__(self):
+    return f"{self.firstname} {self.lastname}"
 "@ | Out-File -FilePath "persons/models.py" -Encoding utf8
 
 python manage.py makemigrations persons
 python manage.py migrate
 python manage.py sqlmigrate persons 0001
 
+#create superuser
+python manage.py createsuperuser
+
 # Start the server
 python manage.py runserver
+
+
 
 }
 
