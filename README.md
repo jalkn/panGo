@@ -47,8 +47,19 @@ arpa/
 │   ├── nets/
 │   └── trends/
 ├── static/
-│   ├── style.css
-│   └── script.js
+│   ├── css/
+│   │   ├── components/
+│   │   │   ├── buttons.css
+│   │   │   ├── forms.css
+│   │   │   ├── modal.css
+│   │   │   ├── navbar.css
+│   │   │   ├── table.css
+│   │   │   └── tabs.css
+│   │   ├── base.css
+│   │   ├── layout.css
+│   │   ├── theme.css
+│   │   └── utilities.css
+│   └── js/
 ├── favicon.png
 ├── index.html
 ├── .gitignore
