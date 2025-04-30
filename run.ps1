@@ -1704,7 +1704,22 @@ Write-Host "🏗️ Creating HTML" -ForegroundColor $YELLOW
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>A R P A</title>
-    <link rel="stylesheet" href="static/style.css">
+    <!-- Base styles -->
+    <link rel="stylesheet" href="static/css/base.css">
+    <!-- Layout -->
+    <link rel="stylesheet" href="static/css/layout.css">
+    <!-- Components -->
+    <link rel="stylesheet" href="static/css/components/navbar.css">
+    <link rel="stylesheet" href="static/css/components/tabs.css">
+    <link rel="stylesheet" href="static/css/components/forms.css">
+    <link rel="stylesheet" href="static/css/components/table.css">
+    <link rel="stylesheet" href="static/css/components/modals.css">
+    <link rel="stylesheet" href="static/css/components/buttons.css">
+    <!-- Utilities -->
+    <link rel="stylesheet" href="static/css/utilities.css">
+    <!-- Theme -->
+    <link rel="stylesheet" href="static/css/theme.css">
+    
     <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
@@ -1972,10 +1987,10 @@ Write-Host "🏗️ Creating HTML" -ForegroundColor $YELLOW
 "@
 
 Write-Host "🏗️ Creating CSS" -ForegroundColor $YELLOW
-    # css
-    Set-Content -Path "static/style.css" -Value @"
-@import url('https://fonts.googleapis.com/css2?family=Open+Sans&display=swap');
 
+# base.css
+@"
+/* Reset and base styles */
 * {
     font-family: 'Open Sans', sans-serif;
     box-sizing: border-box;
@@ -1987,12 +2002,73 @@ body {
     background-color: #f8f9fa;
 }
 
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-5px); }
+    40%, 80% { transform: translateX(5px); }
+}
+
+.shake {
+    animation: shake 0.6s;
+}
+"@ | Out-File -FilePath "static/css/base.css" -Encoding utf8
+
+# layout.css
+@"
+/* Main layout structure */
 .topnav-container {
     display: flex;
     align-items: center;
     margin-bottom: 20px;
 }
 
+.tab-container {
+    display: flex;
+    border-bottom: 1px solid #ccc;
+}
+
+.filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.table-scroll-container {
+    position: relative;
+    height: calc(100vh - 300px);
+    overflow: auto;
+    margin-top: 20px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Responsive layout */
+@media (max-width: 768px) {
+    .filter-form select, 
+    .filter-form input, 
+    .filter-form button,
+    #analyzeButton {
+        width: 100%;
+        margin-right: 0;
+    }
+    
+    #passwordContainer {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .password-input-group {
+        width: 100%;
+    }
+}
+"@ | Out-File -FilePath "static/css/layout.css" -Encoding utf8
+
+# navbar.css
+@"
+/* Top navigation styles */
 .logoIN {
     cursor: pointer;
     width: 40px;
@@ -2023,65 +2099,13 @@ body {
     margin-left: 10px;
     color: #0b00a2;
     font-weight: bold;
-    font-size: 1,5rem;
+    font-size: 1.5rem;
 }
+"@ | Out-File -FilePath "static/css/components/navbar.css" -Encoding utf8
 
-.tab-container {
-    display: flex;
-    border-bottom: 1px solid #ccc;
-}
-
-.tab {
-    padding: 10px 15px;
-    border: none;
-    background-color: #f0f0f0;
-    cursor: pointer;
-    border-bottom: none; /* Remove bottom border */
-    margin-bottom: -1px; /* Adjust margin to cover the border */
-}
-
-.tab.active {
-    background-color: #fff;
-    border-bottom: 1px solid #fff;
-    border: 1px solid #ccc; /* Add border around the active tab */
-    border-bottom: none;
-}
-
-.tab-content {
-    padding: 15px;
-    /* border: 1px solid #ccc; Removed to avoid double border*/
-}
-
-h1 {
-    color: #333;
-    margin-top: 0;
-}
-
-.filter-form, .predetermined-filters {
-    background: white;
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
-}
-
-.filter-form {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-}
-
-.filter-form select, 
-.filter-form input, 
-.filter-form button,
-.password-input {
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    transition: all 0.3s;
-}
-
+#buttons
+@"
+/* Button styles */
 .filter-form button, 
 .apply-filter-btn {
     background-color: #0b00a2;
@@ -2095,6 +2119,110 @@ h1 {
     background-color: #09007a;
 }
 
+.filter-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-buttons button,
+.action-btn {
+    background-color: #e9ecef;
+    color: #495057;
+    border: 1px solid #ced4da;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.filter-buttons button:hover,
+.action-btn:hover {
+    background-color: #dee2e6;
+}
+
+.filter-buttons button.active {
+    background-color: #0b00a2;
+    color: white;
+    border-color: #0b00a2;
+}
+
+.action-btn {
+    padding: 8px 12px;
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.quick-filter-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+"@ | Out-File -FilePath "static/css/components/buttons.css" -Encoding utf8
+
+# tabs
+@"
+/* Tab system styles */
+.tab {
+    padding: 10px 15px;
+    border: none;
+    background-color: #f0f0f0;
+    cursor: pointer;
+    border-bottom: none;
+    margin-bottom: -1px;
+}
+
+.tab.active {
+    background-color: #fff;
+    border-bottom: 1px solid #fff;
+    border: 1px solid #ccc;
+    border-bottom: none;
+}
+
+.tab-content {
+    padding: 15px;
+}
+
+.modal-tabs {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 15px;
+}
+
+.tab-btn {
+    padding: 10px 20px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-weight: bold;
+    color: #666;
+}
+
+.tab-btn.active {
+    color: #0b00a2;
+    border-bottom-color: #0b00a2;
+}
+"@ | Out-File -FilePath "static/css/components/tabs.css" -Encoding utf8
+
+# forms
+@"
+/* Form elements */
+.filter-form select, 
+.filter-form input, 
+.filter-form button,
+.password-input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    transition: all 0.3s;
+}
+
 .filter-form select:focus, 
 .filter-form select.highlighted,
 .password-input:focus {
@@ -2104,40 +2232,82 @@ h1 {
     box-shadow: 0 0 0 2px rgba(11, 0, 162, 0.2);
 }
 
-#filters {
-    margin-bottom: 20px;
+#passwordContainer {
+    display: flex;
+    flex-direction: row;
+    gap: 15px;
+    align-items: center;
+    width: 100%;
 }
 
-.filter-tag {
-    display: inline-block;
-    background: #e9ecef;
-    padding: 5px 10px;
-    border-radius: 20px;
-    margin-right: 10px;
-    margin-bottom: 10px;
+.password-input-group {
+    position: relative;
+    min-width: 0;
+    flex: 1;
 }
 
-.filter-tag button {
-    background: none;
-    border: none;
-    color: #dc3545;
-    margin-left: 5px;
+.toggle-password {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
     cursor: pointer;
 }
 
-/* Table container */
-.table-scroll-container {
-    position: relative;
-    height: calc(100vh - 300px);
-    overflow: auto;
-    margin-top: 20px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    background: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.password-strength {
+    margin-top: 5px;
+    height: 4px;
+    background-color: #eee;
+    border-radius: 2px;
+    overflow: hidden;
 }
 
-/* Table structure */
+.password-strength-bar {
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s, background-color 0.3s;
+}
+
+/* File upload styles */
+.file-upload-label {
+    display: inline-block;
+    cursor: pointer;
+}
+
+.file-upload-button {
+    display: inline-block;
+    padding: 8px 12px;
+    background-color: rgb(0, 176, 15);
+    color: white;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.file-upload-button:hover {
+    background-color: #09007a;
+}
+
+.file-upload-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
+.file-upload-status {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.9rem;
+}
+"@ | Out-File -FilePath "static/css/components/forms.css" -Encoding utf8
+
+# tables
+@"
+/* Table styles */
 #results {
     width: 100%;
     border-collapse: separate;
@@ -2153,7 +2323,7 @@ h1 {
     z-index: 1000;
 }
 
-/* Column controls row (first header row) */
+/* Column controls row */
 .column-controls {
     position: sticky;
     top: 0;
@@ -2161,7 +2331,7 @@ h1 {
     background-color: #f8f9fa;
 }
 
-/* Regular headers (second header row) */
+/* Regular headers */
 #results thead tr:not(.column-controls) {
     position: sticky;
     top: 40px;
@@ -2176,7 +2346,6 @@ h1 {
     z-index: 20;
 }
 
-/* Frozen column controls need highest priority */
 .column-controls th.frozen-column {
     z-index: 1030 !important;
 }
@@ -2234,22 +2403,6 @@ h1 {
     font-weight: bold;
 }
 
-.glyphicon, .trend-icon {
-    font-size: 25px;
-    position: sticky; 
-    color: #bcbcbc;
-    margin-bottom: 0;
-}
-
-.glyphicon:hover {
-    color: #1e00ff;
-}
-
-.trend-icon {
-    font-size: 1.2em;
-    margin-left: 3px;
-}
-
 .loading {
     text-align: center;
     padding: 20px;
@@ -2267,7 +2420,75 @@ h1 {
     font-weight: bold;
 }
 
-/* Modal Styles */
+/* Column controls */
+.column-controls th {
+    padding: 5px !important;
+    height: 40px;
+    vertical-align: middle;
+}
+
+.column-controls-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.freeze-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px;
+    color: #bcbcbc;
+}
+
+.freeze-btn:hover {
+    color: #0b00a2;
+}
+
+.freeze-btn.active, 
+.freeze-btn.active .glyphicon {
+    color: #ff0000 !important;
+}
+
+.width-slider {
+    width: 80px;
+}
+
+/* Mobile table styles */
+@media (max-width: 768px) {
+    #results thead {
+        display: none;
+    }
+    
+    #results tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+    }
+    
+    #results td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        text-align: right;
+        padding-left: 50%;
+        position: relative;
+    }
+    
+    #results td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 12px;
+        font-weight: bold;
+    }
+}
+"@ | Out-File -FilePath "static/css/components/table.css" -Encoding utf8
+
+# modals
+@"
+/* Modal styles */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -2359,173 +2580,6 @@ h1 {
     border-left: 3px solid #0b00a2;
 }
 
-.filter-buttons {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.filter-buttons button,
-.action-btn {
-    background-color: #e9ecef;
-    color: #495057;
-    border: 1px solid #ced4da;
-    padding: 5px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: all 0.2s;
-}
-
-.filter-buttons button:hover,
-.action-btn:hover {
-    background-color: #dee2e6;
-}
-
-.filter-buttons button.active {
-    background-color: #0b00a2;
-    color: white;
-    border-color: #0b00a2;
-}
-
-#loadingBarContainer {
-    width: 100%;
-    background-color: #f1f1f1;
-    padding: 3px;
-    border-radius: 5px;
-    margin: 10px 0;
-}
-
-#loadingBar {
-    width: 0%;
-    height: 20px;
-    background-color: #00a231;
-    border-radius: 3px;
-    transition: width 0.3s;
-    text-align: center;
-    line-height: 20px;
-    color: white;
-}
-
-#loadingText {
-    text-align: center;
-    margin-top: 5px;
-    font-size: 0.9rem;
-    color: #333;
-}
-
-#passwordContainer {
-    display: flex;
-    flex-direction: row;
-    gap: 15px;
-    align-items: center;
-    width: 100%;
-}
-
-.password-input-group {
-    position: relative;
-    min-width: 0;
-    flex: 1;
-}
-
-.toggle-password {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    cursor: pointer;
-}
-
-.toggle-password:hover {
-    opacity: 1;
-}
-
-.password-strength {
-    margin-top: 5px;
-    height: 4px;
-    background-color: #eee;
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.password-strength-bar {
-    height: 100%;
-    width: 0%;
-    transition: width 0.3s, background-color 0.3s;
-}
-
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    20%, 60% { transform: translateX(-5px); }
-    40%, 80% { transform: translateX(5px); }
-}
-
-.shake {
-    animation: shake 0.6s;
-}
-
-/* File Upload Styles */
-.file-upload-container {
-    margin: 10px 0;
-}
-
-.file-upload-label {
-    display: inline-block;
-    cursor: pointer;
-}
-
-.file-upload-button {
-    display: inline-block;
-    padding: 8px 12px;
-    background-color: rgb(0, 176, 15);
-    color: white;
-    border-radius: 4px;
-    transition: background-color 0.3s;
-}
-
-.file-upload-button:hover {
-    background-color: #09007a;
-}
-
-.file-upload-input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    border: 0;
-}
-
-.file-upload-help {
-    display: block;
-    font-size: 0.8rem;
-    color: #666;
-    margin-top: 4px;
-}
-
-.file-upload-status {
-    display: block;
-    margin-top: 4px;
-    font-size: 0.9rem;
-}
-
-/* Column Stats Modal Styles */
-.stats-grid {
-    margin-bottom: 20px;
-}
-
-.stat-item {
-    border-left: 4px solid #0b00a2;
-}
-
-.stat-item span {
-    font-size: 1.1rem;
-    font-weight: bold;
-    color: #0b00a2;
-}
-
 .common-values-section {
     margin: 25px 0;
 }
@@ -2555,52 +2609,6 @@ h1 {
     text-align: right;
     color: #6c757d;
     margin: 0 15px;
-}
-
-.quick-filter-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 20px;
-    flex-wrap: wrap;
-}
-
-.action-btn {
-    padding: 8px 12px;
-}
-
-.action-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Tab Styles */
-.modal-tabs {
-    display: flex;
-    border-bottom: 1px solid #ddd;
-    margin-bottom: 15px;
-}
-
-.tab-btn {
-    padding: 10px 20px;
-    background: none;
-    border: none;
-    border-bottom: 3px solid transparent;
-    cursor: pointer;
-    font-weight: bold;
-    color: #666;
-}
-
-.tab-btn.active {
-    color: #0b00a2;
-    border-bottom-color: #0b00a2;
-}
-
-.tab-content {
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
 }
 
 /* Values Tab Styles */
@@ -2680,121 +2688,106 @@ h1 {
     background: #e9ecef;
 }
 
-/* Column controls styling */
-.column-controls th {
-    padding: 5px !important;
-    height: 40px;
-    vertical-align: middle;
-}
-
-.column-controls-container {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-}
-
-.freeze-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 2px;
-    color: #bcbcbc;
-}
-
-.freeze-btn:hover {
-    color: #0b00a2;
-}
-
-.freeze-btn.active, 
-.freeze-btn.active .glyphicon {
-    color: #ff0000 !important;
-}
-
-.width-slider {
-    width: 80px;
-}
-
-/* Headers need higher z-index */
-#results thead th.frozen-column {
-    z-index: 120;
-}
-
-/* Body cells */
-#results tbody td.frozen-column {
-    z-index: 10;
-}
-
-/* Special styling for the column controls row */
-.column-controls th.frozen-column {
-    z-index: 130 !important;
-}
-
-/* Ensure the slider stays with the column */
-.width-slider {
-    position: sticky;
-    left: 0;
-    z-index: 10;
-}
-
-/* Adjust left positions for multiple frozen columns */
-.frozen-column ~ .frozen-column {
-    left: auto;
-    box-shadow: none;
-}
-
+/* Responsive modal grids */
 @media (max-width: 768px) {
-    .filter-form select, 
-    .filter-form input, 
-    .filter-form button,
-    #analyzeButton {
-        width: 100%;
-        margin-right: 0;
-    }
-    
-    #results thead {
-        display: none;
-    }
-    
-    #results tr {
-        display: block;
-        margin-bottom: 15px;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-    }
-    
-    #results td {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        text-align: right;
-        padding-left: 50%;
-        position: relative;
-    }
-    
-    #results td::before {
-        content: attr(data-label);
-        position: absolute;
-        left: 12px;
-        font-weight: bold;
-    }
-    
     .detail-grid, 
     .variation-grid,
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
-    #passwordContainer {
-        flex-direction: column;
-        gap: 10px;
-    }
-    
-    .password-input-group {
-        width: 100%;
-    }
 }
-"@
+"@ | Out-File -FilePath "static/css/components/modals.css" -Encoding utf8
+
+# utilities
+@"
+/* Utility classes */
+.error-message {
+    color: #dc3545;
+    margin-top: 5px;
+    font-size: 0.9rem;
+}
+
+.loading {
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+    color: #6c757d;
+}
+
+#loadingBarContainer {
+    width: 100%;
+    background-color: #f1f1f1;
+    padding: 3px;
+    border-radius: 5px;
+    margin: 10px 0;
+}
+
+#loadingBar {
+    width: 0%;
+    height: 20px;
+    background-color: #00a231;
+    border-radius: 3px;
+    transition: width 0.3s;
+    text-align: center;
+    line-height: 20px;
+    color: white;
+}
+
+#loadingText {
+    text-align: center;
+    margin-top: 5px;
+    font-size: 0.9rem;
+    color: #333;
+}
+
+.filter-tag {
+    display: inline-block;
+    background: #e9ecef;
+    padding: 5px 10px;
+    border-radius: 20px;
+    margin-right: 10px;
+    margin-bottom: 10px;
+}
+
+.filter-tag button {
+    background: none;
+    border: none;
+    color: #dc3545;
+    margin-left: 5px;
+    cursor: pointer;
+}
+"@ | Out-File -FilePath "static/css/utilities.css" -Encoding utf8
+
+# theme
+@"
+/* Colors and theming */
+:root {
+    --primary-color: #0b00a2;
+    --primary-hover: #09007a;
+    --success-color: #00a231;
+    --danger-color: #dc3545;
+    --text-color: #333;
+    --light-gray: #f8f9fa;
+    --medium-gray: #e9ecef;
+    --dark-gray: #6c757d;
+}
+
+.glyphicon, .trend-icon {
+    font-size: 25px;
+    position: sticky; 
+    color: #bcbcbc;
+    margin-bottom: 0;
+}
+
+.glyphicon:hover {
+    color: var(--primary-color);
+}
+
+.trend-icon {
+    font-size: 1.2em;
+    margin-left: 3px;
+}
+"@ | Out-File -FilePath "static/css/theme.css" -Encoding utf8
 
 Write-Host "🏗️ Creating Javascript" -ForegroundColor $YELLOW
     #javascript
@@ -4451,11 +4444,12 @@ function createStructure {
     Write-Host "🏗️ Creating directory structure" -ForegroundColor $YELLOW
     $directories = @(
         "src",
-        "static",
         "models",
         "tables/cats",
         "tables/nets",
-        "tables/trends"
+        "tables/trends",
+        "static/css/components"
+
     )
     foreach ($dir in $directories) {
         New-Item -Path $dir -ItemType Directory -Force
@@ -4595,15 +4589,7 @@ foreach ($dir in $directories) {
 
 # Create persons.html
 @"
-<!DOCTYPE html>
-<html>
-<body>
 
-<h1>Welcome to</h1>
-<p>A R P A</p>
-
-</body>
-</html>
 "@ | Out-File -FilePath "persons/templates/persons.html" -Encoding utf8
 
 
@@ -4731,8 +4717,6 @@ python manage.py createsuperuser
 # Start the server
 python manage.py runserver
 
-
-
 }
 
 function main {
@@ -4764,9 +4748,9 @@ function main {
     Write-Host "🏗️ The framework is set" -ForegroundColor $YELLOW
     Write-Host "🏗️ Opening index.html in browser..." -ForegroundColor $GREEN
     
-    migratoDjango
-    cd ..
-    #python app.py
+    #migratoDjango
+    #cd ..
+    python app.py
 
 }
 
