@@ -1748,53 +1748,37 @@ Write-Host "🏗️ Creating HTML" -ForegroundColor $YELLOW
             </label>
             <span id="fileUploadStatus" aria-live="polite" class="file-upload-status"></span>
     
-                <div id="passwordContainer" style="display: none;">
-                    <div style="display: flex; gap: 15px; width: 100%;">
-                        <div class="password-input-group" style="flex: 1;">
-                            <input type="password"
-                                id="excelOpenPassword"
-                                placeholder="Contraseña de apertura"
-                                class="password-input">
-                            <span class="toggle-password" onclick="togglePassword('excelOpenPassword')">👁️ </span>
-                        </div>
-                        <div class="password-input-group" style="flex: 1;">
-                            <input type="password"
-                                id="excelModifyPassword"
-                                placeholder="Contraseña de modificación"
-                                class="password-input">
-                            <span class="toggle-password" onclick="togglePassword('excelModifyPassword')">👁️ </span>
-                        </div><button id="analyzeButton">Analizar Archivo</button>
+            <div id="passwordContainer" style="display: none;">
+                <div style="display: flex; gap: 15px; width: 100%;">
+                    <div class="password-input-group" style="flex: 1;">
+                        <input type="password"
+                            id="excelOpenPassword"
+                            placeholder="Contraseña de apertura"
+                            class="password-input">
+                        <span class="toggle-password" onclick="ExcelUpload.togglePassword('excelOpenPassword')">👁️ </span>
                     </div>
+                    <div class="password-input-group" style="flex: 1;">
+                        <input type="password"
+                            id="excelModifyPassword"
+                            placeholder="Contraseña de modificación"
+                            class="password-input">
+                        <span class="toggle-password" onclick="ExcelUpload.togglePassword('excelModifyPassword')">👁️ </span>
+                    </div>
+                    <button id="analyzeButton">Analizar Archivo</button>
                 </div>
-    
-    
-                <button onclick="exportToExcel()" style="margin-left: auto; background-color:rgb(0, 176, 15);" class="fa fa-file-excel-o"> Exportar a Excel</button>
-                <button onclick="exportFrozenColumnsToExcel()" style="background-color:rgb(0, 176, 15);" class="fa fa-file-excel-o"> Exportar columnas congeladas</button>
+            </div>
+            
+            <button onclick="ExportManager.exportToExcel()" style="margin-left: auto; background-color:rgb(0, 176, 15);" class="fa fa-file-excel-o"> Exportar a Excel</button>
+            <button onclick="ExportManager.exportFrozenColumnsToExcel()" style="background-color:rgb(0, 176, 15);" class="fa fa-file-excel-o"> Exportar columnas congeladas</button>
             <div id="passwordError" class="error-message"></div>
         </div>
     </div>
-    <!--
-    <div id="transactions" class="tab-content" style="display: none;">
-        <h2>Extractos</h2>
-        <p>Este es la tabla para los extratos.</p>
-    </div>
-    -->
+    
     <div id="loadingBarContainer" style="display: none;">
         <div id="loadingBar"></div>
         <div id="loadingText">Analizando archivo...</div>
     </div>
-    <!-- SheetJS for Excel export 
-    <div class="filter-form">
-        <div class="filter-buttons">
-            <button onclick="applyPredeterminedFilter('Patrimonio', '>', '3000000000')">Patrimonio > ,000M</button>
-            <button onclick="applyPredeterminedFilter('Patrimonio Var. Rel.', '>', '30')">Patrimonio Var. Rel. > 30%</button>
-            <button onclick="applyPredeterminedFilter('Cant_Bienes', '<', '0')">Cant. Bienes < 0</button>
-            <button onclick="applyPredeterminedFilter('Endeudamiento Var. Rel.', '>', '50')">Endeudamiento Var. Rel. > 50%</button>
-            <button onclick="applyPredeterminedFilter('Ingresos', '>', '50000000')">Ingresos > </button>
-            <button onclick="applyPredeterminedFilter('Cant_Deudas', '>=', '5')">Cant. Deudas ≥ 5</button>
-            <button onclick="applyPredeterminedFilter('Cant_Bienes', '>=', '6')">Cant. Bienes ≥ 6</button>
-        </div> 
-    </div>-->
+    
     <div class="filter-form">
         <select id="column" aria-label="Seleccionar columna para filtrar" title="Columna para filtrar">
             <option value="">-- Selecciona columna --</option>
@@ -1858,11 +1842,11 @@ Write-Host "🏗️ Creating HTML" -ForegroundColor $YELLOW
         <input type="text" id="value1" placeholder="Valor">
         <input type="text" id="value2" placeholder="y" style="display: none;">
         
-        <button onclick="addFilter()"><i class="fa fa-filter"></i> Agregar Filtro</button>
-        <button onclick="clearFilters()" style="background-color: #dc3545; color: white;">Limpiar Filtros</button>
+        <button onclick="FilterManager.addFilter()"><i class="fa fa-filter"></i> Agregar Filtro</button>
+        <button onclick="FilterManager.clearFilters()" style="background-color: #dc3545; color: white;">Limpiar Filtros</button>
         
         <div style="margin-left: auto; background-color:rgb(0, 176, 15);">
-            <button onclick="changeDataSource()">Estado</button>
+            <button onclick="App.changeDataSource()">Estado</button>
             <select id="dataSource" aria-label="Seleccionar fuente de datos" title="Fuente de datos">
                 <option value="src/data.json">Completo</option>
                 <option value="src/fk1Data.json">Incompleto</option>
@@ -1876,62 +1860,57 @@ Write-Host "🏗️ Creating HTML" -ForegroundColor $YELLOW
         <table id="results">
             <thead>
                 <tr class="column-controls">
-
                     <th>
                         <div class="column-controls-container">
-                            <button class="freeze-btn" onclick="toggleFreezeColumn(0)">
+                            <button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(0)">
                                 <i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i>
                             </button>
-                            <button class="freeze-btn" onclick="showColumnStats('Nombre')">
+                            <button class="freeze-btn" onclick="StatsModal.showColumnStats('Nombre')">
                                 <i class="material-icons" style="font-size:18px">equalizer</i>
                             </button>
-                            <button onclick="quickFilter('Nombre')"><span class="sort-icon">↕</span></button>
+                            <button onclick="FilterManager.quickFilter('Nombre')"><span class="sort-icon">↕</span></button>
                         </div>
-                        <input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(0, this.value)">
+                        <input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(0, this.value)">
                     </th>
-
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(1)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Año Declaración')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Año Declaración')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(1, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(2)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Compañía')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Compañía')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(2, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(3)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Cargo')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Cargo')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(3, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(4)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Usuario')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Usuario')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(4, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(5)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Activos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Activos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(5, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(6)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Pasivos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Pasivos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(6, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(7)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Patrimonio')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Patrimonio')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(7, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(8)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Apalancamiento')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Apalancamiento')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(8, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(9)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Endeudamiento')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Endeudamiento')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(9, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(10)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Cant_Deudas')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Cant_Deudas')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(10, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(11)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('BancoSaldo')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('BancoSaldo')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(11, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(12)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Cant_Bancos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Cant_Bancos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(12, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(13)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Bienes')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Bienes')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(13, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(14)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Cant_Bienes')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Cant_Bienes')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(14, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(15)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Inversiones')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Inversiones')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(15, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(16)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Cant_Inversiones')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Cant_Inversiones')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(16, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(17)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Ingresos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Ingresos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(17, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(18)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Cant_Ingresos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Cant_Ingresos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(18, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(19)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Activos Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Activos Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(19, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(20)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Pasivos Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Pasivos Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(20, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(21)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Patrimonio Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Patrimonio Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(21, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(22)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Apalancamiento Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Apalancamiento Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(22, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(23)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Endeudamiento Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Endeudamiento Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(23, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(24)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('BancoSaldo Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('BancoSaldo Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(24, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(25)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Bienes Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Bienes Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(25, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(26)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Inversiones Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Inversiones Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(26, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(27)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Ingresos Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Ingresos Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(27, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(28)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Activos Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Activos Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(28, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(29)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Pasivos Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Pasivos Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(29, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(30)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Patrimonio Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Patrimonio Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(30, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(31)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Apalancamiento Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Apalancamiento Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(31, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(32)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Endeudamiento Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Endeudamiento Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(32, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(33)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('BancoSaldo Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('BancoSaldo Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(33, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(34)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Bienes Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Bienes Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(34, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(35)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Inversiones Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Inversiones Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(35, this.value)"></th>
-                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="toggleFreezeColumn(36)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="showColumnStats('Ingresos Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="quickFilter('Ingresos Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="resizeColumn(36, this.value)"></th>    
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(1)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Año Declaración')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Año Declaración')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(1, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(2)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Compañía')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Compañía')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(2, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(3)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Cargo')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Cargo')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(3, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(4)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Usuario')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Usuario')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(4, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(5)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Activos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Activos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(5, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(6)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Pasivos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Pasivos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(6, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(7)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Patrimonio')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Patrimonio')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(7, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(8)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Apalancamiento')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Apalancamiento')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(8, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(9)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Endeudamiento')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Endeudamiento')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(9, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(10)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Cant_Deudas')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Cant_Deudas')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(10, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(11)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('BancoSaldo')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('BancoSaldo')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(11, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(12)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Cant_Bancos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Cant_Bancos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(12, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(13)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Bienes')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Bienes')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(13, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(14)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Cant_Bienes')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Cant_Bienes')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(14, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(15)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Inversiones')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Inversiones')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(15, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(16)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Cant_Inversiones')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Cant_Inversiones')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(16, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(17)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Ingresos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Ingresos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(17, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(18)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Cant_Ingresos')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Cant_Ingresos')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(18, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(19)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Activos Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Activos Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(19, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(20)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Pasivos Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Pasivos Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(20, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(21)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Patrimonio Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Patrimonio Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(21, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(22)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Apalancamiento Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Apalancamiento Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(22, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(23)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Endeudamiento Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Endeudamiento Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(23, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(24)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('BancoSaldo Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('BancoSaldo Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(24, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(25)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Bienes Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Bienes Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(25, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(26)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Inversiones Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Inversiones Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(26, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(27)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Ingresos Var. Abs.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Ingresos Var. Abs.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(27, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(28)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Activos Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Activos Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(28, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(29)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Pasivos Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Pasivos Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(29, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(30)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Patrimonio Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Patrimonio Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(30, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(31)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Apalancamiento Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Apalancamiento Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(31, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(32)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Endeudamiento Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Endeudamiento Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(32, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(33)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('BancoSaldo Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('BancoSaldo Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(33, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(34)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Bienes Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Bienes Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(34, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(35)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Inversiones Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Inversiones Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(35, this.value)"></th>
+                    <th><div class="column-controls-container"><button class="freeze-btn" onclick="TableRenderer.toggleFreezeColumn(36)"><i class="glyphicon glyphicon-pushpin" style="font-size:18px;"></i></button><button class="freeze-btn" onclick="StatsModal.showColumnStats('Ingresos Var. Rel.')"><i class="material-icons" style="font-size:18px">equalizer</i></button><button onclick="FilterManager.quickFilter('Ingresos Var. Rel.')"><span class="sort-icon">↕</span></button></div><input type="range" class="width-slider" min="50" max="300" value="120" oninput="TableRenderer.resizeColumn(36, this.value)"></th>    
                 </tr>
                 <tr>
-                    <th>
-                        <button>Nombre</button>
-                    </th>
-                
+                    <th><button>Nombre</button></th>
                     <th><button>Año Declaración</button></th>
                     <th><button>Compañía</button></th>
                     <th><button>Cargo</button></th>
@@ -1981,7 +1960,15 @@ Write-Host "🏗️ Creating HTML" -ForegroundColor $YELLOW
 
     <!-- SheetJS for Excel export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
-    <script src="static/script.js"></script>
+    <!-- Load modules -->
+    <script src="static/js/modules/core.js"></script>
+    <script src="static/js/modules/tableRenderer.js"></script>
+    <script src="static/js/modules/filterManager.js"></script>
+    <script src="static/js/modules/detailsModal.js"></script>
+    <script src="static/js/modules/statsModal.js"></script>
+    <script src="static/js/modules/excelUpload.js"></script>
+    <script src="static/js/modules/exportManager.js"></script>
+    <script src="static/js/main.js"></script>
 </body>
 </html>
 "@
@@ -2790,161 +2777,1569 @@ body {
 "@ | Out-File -FilePath "static/css/theme.css" -Encoding utf8
 
 Write-Host "🏗️ Creating Javascript" -ForegroundColor $YELLOW
-    #javascript
-Set-Content -Path "static/script.js" -Value @'
-// Global variables
-let allData = [];
-let filteredData = [];
-let lastSelectedColumn = '';
-let currentFilterColumn = '';
-let currentSortColumn = '';
-let sortDirection = 'asc';
-let processingData = false;
-const filters = [];
-let currentDataSource = 'src/data.json';
-let selectedFile = null;
-let frozenColumns = [];
+# Create the JavaScript modules directory if it doesn't exist
+$modulesDir = "static/js/modules"
+if (-not (Test-Path -Path $modulesDir)) {
+    New-Item -ItemType Directory -Path $modulesDir -Force
+}
 
-// DOM elements
-const operatorSelect = document.getElementById('operator');
-const value2Input = document.getElementById('value2');
+# 1. core.js - Main application setup and core functions
+Set-Content -Path "$modulesDir/core.js" -Value @'
+// Core application module
+const App = (() => {
+    // Global variables
+    let allData = [];
+    let filteredData = [];
+    let lastSelectedColumn = '';
+    let currentFilterColumn = '';
+    let currentSortColumn = '';
+    let sortDirection = 'asc';
+    const filters = [];
+    let currentDataSource = 'src/data.json';
+    let selectedFile = null;
+    let frozenColumns = [];
+    let processingData = false;
 
-// Global variables for values pagination
-let currentValuesPage = 1;
-const valuesPerPage = 50;
-let currentValuesSearch = '';
-let currentValuesColumn = '';
+    // DOM elements
+    const operatorSelect = document.getElementById('operator');
+    const value2Input = document.getElementById('value2');
 
-// Initializing the application
-document.addEventListener('DOMContentLoaded', () => {
-    loadData();
-    setupEventListeners();
-});
+    // Initializing the application
+    function init() {
+        loadData();
+        setupEventListeners();
+    }
 
-function renderValuesPage() {
-    const container = document.getElementById('values-container');
-    if (!container) return;
-    
-    const columnValues = allData.map(item => item[currentValuesColumn]);
-    const valueCounts = {};
-    columnValues.forEach(v => {
-        if (v !== undefined && v !== null) {
-            const val = typeof v === 'string' ? v.trim() : v;
-            valueCounts[val] = (valueCounts[val] || 0) + 1;
+    // Load JSON data
+    async function loadData() {
+        try {
+            const timestamp = new Date().getTime();
+            document.querySelector('#results tbody').innerHTML = `
+                <tr>
+                    <td colspan="35" class="loading">Cargando datos...</td>
+                </tr>
+            `;
+
+            const response = await fetch(`${currentDataSource}?t=${timestamp}`);
+            if (!response.ok) throw new Error(`Error al cargar ${currentDataSource}`);
+            
+            allData = await response.json();
+            filteredData = [...allData];
+            TableRenderer.renderTable();
+            
+        } catch (error) {
+            console.error('Error:', error);
+            document.querySelector('#results tbody').innerHTML = `
+                <tr>
+                    <td colspan="35">Carga el archivo excel para generar el análisis de datos</td>
+                </tr>
+            `;
         }
-    });
-    
-    let allValues = Object.keys(valueCounts)
-        .sort((a, b) => {
-            const isNumeric = !isNaN(parseFloat(a)) && !isNaN(parseFloat(b));
-            if (isNumeric) {
-                return parseFloat(a) - parseFloat(b);
-            }
-            return a.localeCompare(b);
-        });
-    
-    // Apply search filter
-    if (currentValuesSearch) {
-        const searchTerm = currentValuesSearch.toLowerCase();
-        allValues = allValues.filter(v => 
-            String(v).toLowerCase().includes(searchTerm)
-        );
     }
-    
-    const totalValues = allValues.length;
-    const totalPages = Math.ceil(totalValues / valuesPerPage);
-    const startIdx = (currentValuesPage - 1) * valuesPerPage;
-    const endIdx = Math.min(startIdx + valuesPerPage, totalValues);
-    const pageValues = allValues.slice(startIdx, endIdx);
-    
-    // Update UI
-    container.innerHTML = pageValues.map(value => `
-        <div class="value-item">
-            <span class="value">${formatValueForDisplay(value)}</span>
-            <span class="count">${valueCounts[value]} (${Math.round((valueCounts[value] / columnValues.length) * 100)}%)</span>
-            <button onclick="applyCommonValueFilter('${currentValuesColumn}', '${value.replace(/'/g, "\\'")}')" 
-                    class="apply-filter-btn">
-                Filtrar
-            </button>
-        </div>
-    `).join('');
-    
-    document.getElementById('values-showing').textContent = `${startIdx + 1}-${endIdx}`;
-    document.getElementById('values-page-info').textContent = `Página ${currentValuesPage} de ${totalPages}`;
-    document.getElementById('values-prev').disabled = currentValuesPage <= 1;
-    document.getElementById('values-next').disabled = currentValuesPage >= totalPages;
-}
 
-function formatValueForDisplay(value) {
-    if (value === null || value === undefined) return 'N/A';
-    if (typeof value === 'string') return value;
-    if (Math.abs(value) >= 1000000) {
-        return '$' + (value / 1000000).toFixed(2) + 'M';
-    }
-    return new Intl.NumberFormat('es-CO').format(value);
-}
-
-function searchValues(columnName) {
-    currentValuesSearch = document.getElementById('values-search-input').value;
-    currentValuesPage = 1;
-    currentValuesColumn = columnName;
-    renderValuesPage();
-}
-
-function navigateValuesPage(direction) {
-    currentValuesPage += direction;
-    renderValuesPage();
-}
-
-function switchTab(tabId, button) {
-    // Hide all tab contents
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Deactivate all tab buttons
-    document.querySelectorAll('.modal-tabs .tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // Activate selected tab
-    document.getElementById(`${tabId}-tab`).classList.add('active');
-    button.classList.add('active');
-    
-    // If switching to values tab and not yet loaded
-    if (tabId === 'values' && document.getElementById('values-container').innerHTML === '') {
-        renderValuesPage();
-    }
-}
-
-
-// Load JSON data
-async function loadData() {
-    try {
-        const timestamp = new Date().getTime();
-        document.querySelector('#results tbody').innerHTML = `
-            <tr>
-                <td colspan="35" class="loading">Cargando datos...</td>
-            </tr>
-        `;
-
-        const response = await fetch(`${currentDataSource}?t=${timestamp}`);
-        if (!response.ok) throw new Error(`Error al cargar ${currentDataSource}`);
+    // Set up event listeners
+    function setupEventListeners() {
+        operatorSelect.addEventListener('change', toggleValue2Input);
         
-        allData = await response.json();
-        filteredData = [...allData];
+        document.getElementById('column').addEventListener('change', function() {
+            currentFilterColumn = this.value;
+            if (this.value) {
+                this.classList.add('highlighted');
+            } else {
+                this.classList.remove('highlighted');
+            }
+            
+            // Auto-focus the value input for quick filtering
+            if (this.value && lastSelectedColumn !== this.value) {
+                document.getElementById('value1').focus();
+            }
+            lastSelectedColumn = this.value;
+        });
+
+        document.getElementById('excelUpload').addEventListener('change', function(e) {
+            const statusElement = document.getElementById('fileUploadStatus');
+            const passwordContainer = document.getElementById('passwordContainer');
+            
+            if (this.files.length > 0) {
+                selectedFile = this.files[0];
+                statusElement.textContent = `Archivo seleccionado: ${selectedFile.name}`;
+                statusElement.style.color = '#0b00a2';
+                passwordContainer.style.display = 'block';
+            } else {
+                selectedFile = null;
+                statusElement.textContent = '';
+                passwordContainer.style.display = 'none';
+            }
+        });
+    }
+
+    // Toggle second value input for 'between' operator
+    function toggleValue2Input() {
+        value2Input.style.display = operatorSelect.value === 'between' ? 'inline-block' : 'none';
+    }
+
+    // Change data source
+    function changeDataSource() {
+        const dataSourceSelect = document.getElementById('dataSource');
+        currentDataSource = dataSourceSelect.value;
+        
+        // Clear existing filters
+        filters.length = 0;
+        FilterManager.renderFilters();
+        
+        // Reset sort
+        currentSortColumn = '';
+        sortDirection = 'asc';
+        
+        // Reload data
+        loadData();
+        
+        // Clear any highlights
+        document.querySelectorAll('.highlighted-column').forEach(el => {
+            el.classList.remove('highlighted-column');
+        });
+        document.getElementById('column').classList.remove('highlighted');
+        currentFilterColumn = '';
+        lastSelectedColumn = '';
+        
+        // Reset column dropdown
+        document.getElementById('column').selectedIndex = 0;
+    }
+
+    // Public API
+    return {
+        init,
+        loadData,
+        changeDataSource,
+        getData: () => ({ allData, filteredData }),
+        getState: () => ({ 
+            lastSelectedColumn, 
+            currentFilterColumn, 
+            currentSortColumn, 
+            sortDirection,
+            frozenColumns,
+            processingData
+        }),
+        setState: (newState) => {
+            if (newState.lastSelectedColumn !== undefined) lastSelectedColumn = newState.lastSelectedColumn;
+            if (newState.currentFilterColumn !== undefined) currentFilterColumn = newState.currentFilterColumn;
+            if (newState.currentSortColumn !== undefined) currentSortColumn = newState.currentSortColumn;
+            if (newState.sortDirection !== undefined) sortDirection = newState.sortDirection;
+            if (newState.frozenColumns !== undefined) frozenColumns = newState.frozenColumns;
+            if (newState.processingData !== undefined) processingData = newState.processingData;
+        },
+        getFilters: () => filters,
+        setSelectedFile: (file) => { selectedFile = file; },
+        getSelectedFile: () => selectedFile,
+        getCurrentDataSource: () => currentDataSource
+    };
+})();
+
+// Initialize the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', App.init);
+'@
+
+# 2. tableRenderer.js - Handles table rendering and column operations
+Set-Content -Path "$modulesDir/tableRenderer.js" -Value @'
+// Table rendering module
+const TableRenderer = (() => {
+    // Render the data table
+    function renderTable() {
+        const { filteredData } = App.getData();
+        const tbody = document.querySelector('#results tbody');
+        
+        if (filteredData.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="37">Generando datos desde el archivo excel</td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tbody.innerHTML = filteredData.map(item => {
+            // Function to format cell with color based on value
+            const formatCell = (value, isPercentage = false) => {
+                if (value === undefined || value === null || value === '') return '';
+                
+                // Remove trend icons if present
+                const cleanValue = String(value).replace(/[📈📉➡️]/g, '').trim();
+                
+                // Try to parse as number
+                const numValue = parseFloat(cleanValue.replace('%', '').replace(/[^\d.-]/g, ''));
+                if (isNaN(numValue)) return value;
+                
+                // Format number
+                let formattedValue;
+                if (isPercentage) {
+                    formattedValue = numValue.toFixed(2) + '%';
+                } else if (Math.abs(numValue) >= 1000000) {
+                    formattedValue = '$' + (numValue / 1000000).toFixed(2) + 'M';
+                } else {
+                    formattedValue = new Intl.NumberFormat('es-CO').format(numValue);
+                }
+                
+                // Determine color - only red for negative, black otherwise
+                const color = numValue < 0 ? 'color: #dc3545;' : 'color: #000;';
+                
+                return `<span style="${color}">${formattedValue}</span>`;
+            };
+            
+            return `
+                <tr>
+                    <td>${formatCell(item.Nombre)}</td>
+                    <td>${formatCell(item['Año Declaración'])}</td>
+                    <td>${formatCell(item['Compañía'])}</td>
+                    <td>${formatCell(item.Cargo)}</td>
+                    <td>${formatCell(item.Usuario)}</td>
+                    <td>${formatCell(item.Activos)}</td>
+                    <td>${formatCell(item.Pasivos)}</td>
+                    <td>${formatCell(item.Patrimonio)}</td>
+                    <td>${formatCell(item.Apalancamiento, true)}</td>
+                    <td>${formatCell(item.Endeudamiento, true)}</td>
+                    <td>${formatCell(item['Cant_Deudas'])}</td>
+                    <td>${formatCell(item.BancoSaldo)}</td>
+                    <td>${formatCell(item.Cant_Bancos)}</td>
+                    <td>${formatCell(item.Bienes)}</td>
+                    <td>${formatCell(item.Cant_Bienes)}</td>
+                    <td>${formatCell(item.Inversiones)}</td>
+                    <td>${formatCell(item.Cant_Inversiones)}</td>
+                    <td>${formatCell(item.Ingresos)}</td>
+                    <td>${formatCell(item.Cant_Ingresos)}</td>
+                    <td>${formatCell(item['Activos Var. Abs.'])}</td>
+                    <td>${formatCell(item['Pasivos Var. Abs.'])}</td>
+                    <td>${formatCell(item['Patrimonio Var. Abs.'])}</td>
+                    <td>${formatCell(item['Apalancamiento Var. Abs.'], true)}</td>
+                    <td>${formatCell(item['Endeudamiento Var. Abs.'], true)}</td>
+                    <td>${formatCell(item['BancoSaldo Var. Abs.'])}</td>
+                    <td>${formatCell(item['Bienes Var. Abs.'])}</td>
+                    <td>${formatCell(item['Inversiones Var. Abs.'])}</td>
+                    <td>${formatCell(item['Ingresos Var. Abs.'])}</td>
+                    <td>${formatCell(item['Activos Var. Rel.'], true)}</td>
+                    <td>${formatCell(item['Pasivos Var. Rel.'], true)}</td>
+                    <td>${formatCell(item['Patrimonio Var. Rel.'], true)}</td>
+                    <td>${formatCell(item['Apalancamiento Var. Rel.'], true)}</td>
+                    <td>${formatCell(item['Endeudamiento Var. Rel.'], true)}</td>
+                    <td>${formatCell(item['BancoSaldo Var. Rel.'], true)}</td>
+                    <td>${formatCell(item['Bienes Var. Rel.'], true)}</td>
+                    <td>${formatCell(item['Inversiones Var. Rel.'], true)}</td>
+                    <td>${formatCell(item['Ingresos Var. Rel.'], true)}</td>
+                    <td style="position: sticky; right: 0; background-color: white;">
+                        <button onclick="DetailsModal.viewDetails('${item.Usuario}', ${item['Año Declaración']})" 
+                                style="background-color: #0b00a2; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                            Ver
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // After rendering, update frozen columns
+        if (App.getState().frozenColumns.length > 0) {
+            updateFrozenColumns();
+        }
+        
+        // Ensure proper z-index stacking
+        document.querySelectorAll('#results thead th').forEach(th => {
+            th.style.zIndex = '20';
+        });
+    }
+
+    // Sort table
+    function sortTable(columnName, direction) {
+        const { filteredData } = App.getData();
+        
+        filteredData.sort((a, b) => {
+            let valA = a[columnName];
+            let valB = b[columnName];
+            
+            // Handle numeric values
+            if (!isNaN(parseFloat(valA)) && !isNaN(parseFloat(valB))) {
+                valA = parseFloat(valA);
+                valB = parseFloat(valB);
+                return direction === 'asc' ? valA - valB : valB - valA;
+            }
+            
+            // Handle string values
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                return direction === 'asc' 
+                    ? valA.localeCompare(valB) 
+                    : valB.localeCompare(valA);
+            }
+            
+            return 0;
+        });
+        
+        App.setState({ currentSortColumn: columnName, sortDirection: direction });
         renderTable();
         
-    } catch (error) {
-        console.error('Error:', error);
-        document.querySelector('#results tbody').innerHTML = `
-            <tr>
-                <td colspan="35">Carga el archivo excel para generar el análisis de datos</td>
-            </tr>
+        // Re-apply column highlight if there's a current filter column
+        const { currentFilterColumn } = App.getState();
+        if (currentFilterColumn) {
+            highlightColumn(currentFilterColumn);
+        }
+    }
+
+    // Highlight table column
+    function highlightColumn(columnName) {
+        // Remove any existing highlights
+        const headers = document.querySelectorAll('#results th');
+        const cells = document.querySelectorAll('#results td');
+        
+        headers.forEach(header => header.classList.remove('highlighted-column'));
+        cells.forEach(cell => cell.classList.remove('highlighted-column'));
+        
+        // Find the column index
+        const columnMap = {
+            'Usuario': 4,
+            'Nombre': 0,
+            'Compañía': 2,
+            'Cargo': 3,
+            'Año Declaración': 1,
+            'Activos': 5,
+            'Pasivos': 6,
+            'Patrimonio': 7,
+            'Apalancamiento': 8,
+            'Endeudamiento': 9,
+            'Cant_Deudas': 10,
+            'BancoSaldo': 11,
+            'Cant_Bancos': 12,
+            'Bienes': 13,
+            'Cant_Bienes': 14,
+            'Inversiones': 15,
+            'Cant_Inversiones': 16,
+            'Ingresos': 17,
+            'Cant_Ingresos': 18,
+            'Activos Var. Abs.': 19,
+            'Pasivos Var. Abs.': 20,
+            'Patrimonio Var. Abs.': 21,
+            'Apalancamiento Var. Abs.': 22,
+            'Endeudamiento Var. Abs.': 23,
+            'BancoSaldo Var. Abs.': 24,
+            'Bienes Var. Abs.': 25,
+            'Inversiones Var. Abs.': 26,
+            'Ingresos Var. Abs.': 27,
+            'Activos Var. Rel.': 28,
+            'Pasivos Var. Rel.': 29,
+            'Patrimonio Var. Rel.': 30,
+            'Apalancamiento Var. Rel.': 31,
+            'Endeudamiento Var. Rel.': 32,
+            'BancoSaldo Var. Rel.': 33,
+            'Bienes Var. Rel.': 34,
+            'Inversiones Var. Rel.': 35,
+            'Ingresos Var. Rel.': 36
+        };
+        
+        const columnIndex = columnMap[columnName];
+        if (columnIndex === undefined) return;
+        
+        // Highlight header
+        if (headers[columnIndex]) {
+            headers[columnIndex].classList.add('highlighted-column');
+        }
+        
+        // Highlight cells - including frozen columns
+        document.querySelectorAll(`#results tr > *:nth-child(${columnIndex + 1})`).forEach(cell => {
+            cell.classList.add('highlighted-column');
+        });
+        
+        // Update current filter column
+        App.setState({ 
+            currentFilterColumn: columnName,
+            lastSelectedColumn: columnName 
+        });
+    }
+
+    // Update frozen columns
+    function updateFrozenColumns() {
+        const { frozenColumns } = App.getState();
+        
+        // First remove all frozen classes and reset positions
+        document.querySelectorAll('.frozen-column').forEach(el => {
+            el.classList.remove('frozen-column');
+            el.style.left = '';
+        });
+
+        // Calculate cumulative left positions
+        let leftPosition = 0;
+        
+        frozenColumns.forEach((colIndex, i) => {
+            const columnCells = document.querySelectorAll(`
+                #results thead th:nth-child(${colIndex + 1}),
+                #results tbody td:nth-child(${colIndex + 1})
+            `);
+            
+            const firstCell = columnCells[0];
+            const columnWidth = firstCell.offsetWidth;
+            
+            columnCells.forEach(cell => {
+                cell.classList.add('frozen-column');
+                cell.style.left = `${leftPosition}px`;
+                
+                // Set z-index based on cell type
+                if (cell.tagName === 'TH') {
+                    if (cell.parentElement.classList.contains('column-controls')) {
+                        cell.style.zIndex = '1030';
+                    } else {
+                        cell.style.zIndex = '1020';
+                    }
+                } else {
+                    cell.style.zIndex = '10';
+                }
+            });
+            
+            leftPosition += columnWidth;
+        });
+        
+        // Adjust the top position of the second header row
+        const controlsRow = document.querySelector('.column-controls');
+        const secondHeaderRow = document.querySelector('#results thead tr:not(.column-controls)');
+        
+        if (controlsRow && secondHeaderRow) {
+            const controlsHeight = controlsRow.offsetHeight;
+            secondHeaderRow.style.top = `${controlsHeight}px`;
+        }
+    }
+
+    // Toggle column freeze
+    function toggleFreezeColumn(columnIndex) {
+        const columnCells = document.querySelectorAll(`#results tr > *:nth-child(${columnIndex + 1})`);
+        const freezeBtn = document.querySelector(`th:nth-child(${columnIndex + 1}) .freeze-btn`);
+        
+        // Get the column name from the header
+        const columnName = document.querySelector(`#results thead tr:not(.column-controls) th:nth-child(${columnIndex + 1}) button`).textContent;
+        
+        let { frozenColumns } = App.getState();
+        
+        if (frozenColumns.includes(columnIndex)) {
+            // Unfreeze
+            frozenColumns = frozenColumns.filter(col => col !== columnIndex);
+            columnCells.forEach(cell => {
+                cell.classList.remove('frozen-column');
+                cell.style.left = '';
+            });
+            freezeBtn.classList.remove('active');
+            
+            // Remove highlight if this was the only frozen column
+            if (frozenColumns.length === 0) {
+                document.querySelectorAll('.highlighted-column').forEach(el => {
+                    el.classList.remove('highlighted-column');
+                });
+            }
+        } else {
+            // Freeze
+            frozenColumns.push(columnIndex);
+            frozenColumns.sort((a, b) => a - b); // Keep in order
+            freezeBtn.classList.add('active');
+            
+            // Highlight the column
+            highlightColumn(columnName);
+        }
+        
+        App.setState({ frozenColumns });
+        updateFrozenColumns();
+        
+        // Force a reflow to ensure proper rendering
+        document.querySelector('.table-scroll-container').style.overflow = 'hidden';
+        document.querySelector('.table-scroll-container').offsetHeight;
+        document.querySelector('.table-scroll-container').style.overflow = 'auto';
+    }
+
+    // Resize column
+    function resizeColumn(columnIndex, width) {
+        const columnCells = document.querySelectorAll(`#results tr > *:nth-child(${columnIndex + 1})`);
+        columnCells.forEach(cell => {
+            cell.style.width = `${width}px`;
+            cell.style.minWidth = `${width}px`;
+            cell.style.maxWidth = `${width}px`;
+        });
+        
+        // Update frozen columns positions if this column is frozen
+        const { frozenColumns } = App.getState();
+        if (frozenColumns.includes(columnIndex)) {
+            updateFrozenColumns();
+        }
+    }
+
+    // Public API
+    return {
+        renderTable,
+        sortTable,
+        highlightColumn,
+        updateFrozenColumns,
+        toggleFreezeColumn,
+        resizeColumn
+    };
+})();
+'@
+
+# 3. filterManager.js - Handles filtering functionality
+Set-Content -Path "$modulesDir/filterManager.js" -Value @'
+// Filter management module
+const FilterManager = (() => {
+    // Add a new filter
+    function addFilter() {
+        const column = document.getElementById('column').value;
+        const operator = document.getElementById('operator').value;
+        const value1 = document.getElementById('value1').value.trim();
+        let value2 = '';
+        
+        if (!column || !operator || !value1) {
+            alert('Por favor complete todos los campos del filtro');
+            return;
+        }
+        
+        if (operator === 'between') {
+            value2 = document.getElementById('value2').value.trim();
+            if (!value2) {
+                alert('Por favor complete el segundo valor para el filtro "Entre"');
+                return;
+            }
+        }
+        
+        // Check if we should use string comparison instead of numeric
+        const isNumericComparison = ['>', '<', '=', '>=', '<=', 'between'].includes(operator) && 
+                                   !isNaN(parseFloat(value1)) && 
+                                   (operator !== 'between' || !isNaN(parseFloat(value2)));
+        
+        const filters = App.getFilters();
+        filters.push({ 
+            column, 
+            operator, 
+            value1, 
+            value2,
+            isNumericComparison  // Add this flag to the filter
+        });
+        
+        renderFilters();
+        applyFilters();
+        
+        // Highlight the column in the table
+        TableRenderer.highlightColumn(column);
+        
+        // Keep the column selected in the dropdown
+        App.setState({ 
+            lastSelectedColumn: column,
+            currentFilterColumn: column 
+        });
+    }
+
+    // Apply active filters
+    function applyFilters() {
+        const filters = App.getFilters();
+        const { allData } = App.getData();
+        let { filteredData } = App.getData();
+        
+        if (filters.length === 0) {
+            filteredData = [...allData];
+            App.setState({ filteredData });
+            TableRenderer.renderTable();
+            return;
+        }
+        
+        filteredData = allData.filter(item => {
+            return filters.every(filter => {
+                const itemValue = item[filter.column];
+                if (itemValue === undefined || itemValue === null) return false;
+                
+                // Handle string comparison
+                if (!filter.isNumericComparison) {
+                    const itemStr = String(itemValue).toLowerCase();
+                    const filterStr = filter.value1.toLowerCase();
+                    
+                    switch (filter.operator) {
+                        case 'contains': 
+                            return itemStr.includes(filterStr);
+                        case '=':
+                            return itemStr === filterStr;
+                        default:
+                            return true;
+                    }
+                }
+                
+                // Handle numeric comparison
+                let numericValue;
+                if (typeof itemValue === 'string' && itemValue.includes('%')) {
+                    numericValue = parseFloat(itemValue.replace('%', ''));
+                } else {
+                    numericValue = parseFloat(itemValue);
+                }
+                
+                const filterValue1 = parseFloat(filter.value1);
+                const filterValue2 = parseFloat(filter.value2);
+                
+                switch (filter.operator) {
+                    case '>': return numericValue > filterValue1;
+                    case '<': return numericValue < filterValue1;
+                    case '=': return numericValue === filterValue1;
+                    case '>=': return numericValue >= filterValue1;
+                    case '<=': return numericValue <= filterValue1;
+                    case 'between': 
+                        return numericValue >= filterValue1 && numericValue <= filterValue2;
+                    case 'contains':
+                        return String(itemValue).toLowerCase().includes(filter.value1.toLowerCase());
+                    default: return true;
+                }
+            });
+        });
+        
+        App.setState({ filteredData });
+        TableRenderer.renderTable();
+        
+        // Re-apply column highlight if there's a current filter column
+        const { currentFilterColumn } = App.getState();
+        if (currentFilterColumn) {
+            TableRenderer.highlightColumn(currentFilterColumn);
+        }
+    }
+
+    // Render active filters
+    function renderFilters() {
+        const filters = App.getFilters();
+        const filtersContainer = document.getElementById('filters');
+        filtersContainer.innerHTML = filters.map((filter, index) => `
+            <div class="filter-tag">
+                ${filter.column} ${getOperatorSymbol(filter.operator)} ${filter.value1}
+                ${filter.operator === 'between' ? ` y ${filter.value2}` : ''}
+                <button onclick="FilterManager.removeFilter(${index})">×</button>
+            </div>
+        `).join('');
+    }
+
+    // Get operator symbol for display
+    function getOperatorSymbol(operator) {
+        const symbols = {
+            '>': '>',
+            '<': '<',
+            '=': '=',
+            '>=': '≥',
+            '<=': '≤',
+            'between': 'entre',
+            'contains': 'contiene'
+        };
+        return symbols[operator] || operator;
+    }
+
+    // Remove a filter
+    function removeFilter(index) {
+        const filters = App.getFilters();
+        filters.splice(index, 1);
+        
+        // Re-render the remaining filters
+        renderFilters();
+        
+        // Re-apply the remaining filters
+        applyFilters();
+        
+        // If no filters remain, clear the highlights
+        if (filters.length === 0) {
+            document.querySelectorAll('.highlighted-column').forEach(el => {
+                el.classList.remove('highlighted-column');
+            });
+            document.getElementById('column').classList.remove('highlighted');
+            App.setState({ 
+                currentFilterColumn: '',
+                lastSelectedColumn: '' 
+            });
+        }
+    }
+
+    // Clear all filters
+    function clearFilters() {
+        // Clear the filters array
+        const filters = App.getFilters();
+        filters.length = 0;
+        
+        // Reset the filter form inputs
+        document.getElementById('column').value = '';
+        document.getElementById('operator').value = '>';
+        document.getElementById('value1').value = '';
+        document.getElementById('value2').value = '';
+        document.getElementById('value2').style.display = 'none';
+        
+        // Reset the UI
+        renderFilters();
+        const { allData } = App.getData();
+        App.setState({ 
+            filteredData: [...allData],
+            currentFilterColumn: '',
+            lastSelectedColumn: '',
+            currentSortColumn: '',
+            sortDirection: 'asc'
+        });
+        TableRenderer.renderTable();
+        
+        // Clear button highlights
+        document.querySelectorAll('.filter-buttons button').forEach(button => {
+            button.classList.remove('active');
+        });
+        
+        // Clear column highlights
+        document.querySelectorAll('.highlighted-column').forEach(el => {
+            el.classList.remove('highlighted-column');
+        });
+        
+        // Reset column dropdown
+        document.getElementById('column').classList.remove('highlighted');
+        
+        // Reset sort indicators
+        document.querySelectorAll('#results th .sort-icon').forEach(icon => {
+            icon.textContent = '↕';
+        });
+        document.querySelectorAll('#results th').forEach(th => {
+            th.classList.remove('sorted-asc', 'sorted-desc');
+        });
+    }
+
+    // Handle predetermined filters
+    function applyPredeterminedFilter(column, operator, value1) {
+        const filters = App.getFilters();
+        
+        // Check if this filter already exists
+        const existingIndex = filters.findIndex(f => 
+            f.column === column && f.operator === operator && f.value1 === value1
+        );
+        
+        if (existingIndex === -1) {
+            // Add new filter
+            filters.push({ column, operator, value1 });
+            
+            // Highlight the button
+            const buttons = document.querySelectorAll('.filter-buttons button');
+            buttons.forEach(button => {
+                if (button.textContent.includes(column) && 
+                    button.textContent.includes(operator) &&
+                    button.textContent.includes(value1)) {
+                    button.classList.add('active');
+                }
+            });
+        } else {
+            // Remove existing filter
+            filters.splice(existingIndex, 1);
+            
+            // Remove highlight from button
+            const buttons = document.querySelectorAll('.filter-buttons button');
+            buttons.forEach(button => {
+                if (button.textContent.includes(column) && 
+                    button.textContent.includes(operator) &&
+                    button.textContent.includes(value1)) {
+                    button.classList.remove('active');
+                }
+            });
+        }
+        
+        renderFilters();
+        applyFilters();
+        TableRenderer.highlightColumn(column);
+    }
+
+    // Quick filter by column
+    function quickFilter(columnName) {
+        const { currentSortColumn, sortDirection } = App.getState();
+        
+        // Then proceed with the existing sorting functionality
+        if (currentSortColumn === columnName) {
+            App.setState({ sortDirection: sortDirection === 'asc' ? 'desc' : 'asc' });
+        } else {
+            App.setState({ 
+                currentSortColumn: columnName,
+                sortDirection: 'asc'
+            });
+        }
+        
+        document.querySelectorAll('#results th').forEach(th => {
+            th.classList.remove('sorted-asc', 'sorted-desc');
+        });
+        
+        const columnMap = {
+            'Usuario': 4,
+            'Nombre': 0,
+            'Compañía': 2,
+            'Cargo': 3,
+            'Año Declaración': 1,
+            'Activos': 5,
+            'Pasivos': 6,
+            'Patrimonio': 7,
+            'Apalancamiento': 8,
+            'Endeudamiento': 9,
+            'Cant_Deudas': 10,
+            'BancoSaldo': 11,
+            'Cant_Bancos': 12,
+            'Bienes': 13,
+            'Cant_Bienes': 14,
+            'Inversiones': 15,
+            'Cant_Inversiones': 16,
+            'Ingresos': 17,
+            'Cant_Ingresos': 18,
+            'Activos Var. Abs.': 19,
+            'Pasivos Var. Abs.': 20,
+            'Patrimonio Var. Abs.': 21,
+            'Apalancamiento Var. Abs.': 22,
+            'Endeudamiento Var. Abs.': 23,
+            'BancoSaldo Var. Abs.': 24,
+            'Bienes Var. Abs.': 25,
+            'Inversiones Var. Abs.': 26,
+            'Ingresos Var. Abs.': 27,
+            'Activos Var. Rel.': 28,
+            'Pasivos Var. Rel.': 29,
+            'Patrimonio Var. Rel.': 30,
+            'Apalancamiento Var. Rel.': 31,
+            'Endeudamiento Var. Rel.': 32,
+            'BancoSaldo Var. Rel.': 33,
+            'Bienes Var. Rel.': 34,
+            'Inversiones Var. Rel.': 35,
+            'Ingresos Var. Rel.': 36
+        };
+        
+        const columnIndex = columnMap[columnName];
+        if (columnIndex !== undefined) {
+            const header = document.querySelector(`#results th:nth-child(${columnIndex + 1})`);
+            if (header) {
+                const newDirection = App.getState().sortDirection;
+                header.classList.add(`sorted-${newDirection}`);
+                
+                const icon = header.querySelector('.sort-icon');
+                if (icon) {
+                    icon.textContent = newDirection === 'asc' ? '↑' : '↓';
+                }
+            }
+        }
+        
+        TableRenderer.highlightColumn(columnName);
+        App.setState({ 
+            currentFilterColumn: columnName,
+            lastSelectedColumn: columnName 
+        });
+        
+        TableRenderer.sortTable(columnName, App.getState().sortDirection);
+    }
+
+    // Public API
+    return {
+        addFilter,
+        applyFilters,
+        renderFilters,
+        removeFilter,
+        clearFilters,
+        applyPredeterminedFilter,
+        quickFilter
+    };
+})();
+'@
+
+# 4. detailsModal.js - Handles the details modal functionality
+Set-Content -Path "$modulesDir/detailsModal.js" -Value @'
+// Details modal module
+const DetailsModal = (() => {
+    // View detailed record
+    function viewDetails(userId, year) {
+        // Convert year to number if it's coming as string
+        year = typeof year === 'string' ? parseInt(year) : year;
+        
+        const { allData } = App.getData();
+        
+        // Find the record with case-insensitive comparison
+        const record = allData.find(item => {
+            // Handle potential undefined/null values
+            const itemUserId = item.Usuario ? item.Usuario.toString().toLowerCase() : '';
+            const itemYear = item['Año Declaración'] ? parseInt(item['Año Declaración']) : null;
+            
+            return itemUserId === userId.toLowerCase() && itemYear === year;
+        });
+
+        if (!record) {
+            alert(`Registro no encontrado para:\nUsuario: ${userId}\nAño: ${year}`);
+            console.error('Record not found:', { userId, year, allData });
+            return;
+        }
+
+        // Create modal HTML with all available data
+        const modalHTML = `
+            <div id="detailModal" class="modal-overlay">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Detalles Completo - ${record.Nombre} (${year})</h2>
+                        <div>
+                            <button onclick="DetailsModal.exportDetailsToExcel()" style="margin-right: 10px; padding: 5px 10px; background-color: #0b00a2; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                Exportar a Excel
+                            </button>
+                            <button onclick="DetailsModal.closeModal()" class="close-button">×</button>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-body">
+                        ${renderDetailSection('Información Básica', [
+                            { label: 'Nombre', value: record.Nombre },
+                            { label: 'Usuario', value: record.Usuario },
+                            { label: 'Compañía', value: record['Compañía'] },
+                            { label: 'Cargo', value: record.Cargo },
+                            { label: 'Año Declaración', value: record['Año Declaración'] },
+                            { label: 'Año Creación', value: record['Año Creación'] }
+                        ])}
+                        
+                        ${renderFinancialSection('Resumen Financiero', record)}
+                        
+                        ${renderVariationSection('Variaciones Recientes', record)}
+                        
+                        <!-- Yearly Variations Sections -->
+                        ${renderYearlyVariationSection('Variaciones con 2021', record, '2021')}
+                        ${renderYearlyVariationSection('Variaciones con 2022', record, '2022')}
+                        ${renderYearlyVariationSection('Variaciones con 2023', record, '2023')}
+                        ${renderYearlyVariationSection('Variaciones con 2024', record, '2024')}
+                        
+                        <!-- Yearly Count Variations Sections -->
+                        ${renderYearlyCountVariationSection('Variaciones de Cantidad con 2021', record, '2021')}
+                        ${renderYearlyCountVariationSection('Variaciones de Cantidad con 2022', record, '2022')}
+                        ${renderYearlyCountVariationSection('Variaciones de Cantidad con 2023', record, '2023')}
+                        ${renderYearlyCountVariationSection('Variaciones de Cantidad con 2024', record, '2024')}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    // Helper function to render detail sections
+    function renderDetailSection(title, fields) {
+        const filteredFields = fields.filter(field => field.value !== undefined && field.value !== null);
+        
+        if (filteredFields.length === 0) return '';
+        
+        return `
+            <div class="detail-section">
+                <h3>${title}</h3>
+                <div class="detail-grid">
+                    ${filteredFields.map(field => `
+                        <div class="detail-item">
+                            <strong>${field.label}:</strong>
+                            <span>${field.value}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
         `;
     }
-}
 
+    // Helper function to render financial section
+    function renderFinancialSection(title, record) {
+        const financialFields = [
+            { label: 'Activos', value: formatNumber(record.Activos) },
+            { label: 'Pasivos', value: formatNumber(record.Pasivos) },
+            { label: 'Patrimonio', value: formatNumber(record.Patrimonio) },
+            { label: 'Apalancamiento', value: record.Apalancamiento ? `${record.Apalancamiento}%` : null },
+            { label: 'Endeudamiento', value: record.Endeudamiento ? `${record.Endeudamiento}%` : null },
+            { label: 'Saldo Bancario', value: formatNumber(record.BancoSaldo) },
+            { label: 'Bienes', value: formatNumber(record.Bienes) },
+            { label: 'Inversiones', value: formatNumber(record.Inversiones) },
+            { label: 'Ingresos', value: formatNumber(record.Ingresos) }
+        ].filter(field => field.value !== undefined && field.value !== null);
+        
+        return renderDetailSection(title, financialFields);
+    }
+
+    // Helper function to render variation sections
+    function renderVariationSection(title, record) {
+        const variationFields = [
+            { label: 'Activos Var. Abs.', value: record['Activos Var. Abs.'] },
+            { label: 'Activos Var. Rel.', value: record['Activos Var. Rel.'] },
+            { label: 'Pasivos Var. Abs.', value: record['Pasivos Var. Abs.'] },
+            { label: 'Pasivos Var. Rel.', value: record['Pasivos Var. Rel.'] },
+            { label: 'Patrimonio Var. Abs.', value: record['Patrimonio Var. Abs.'] },
+            { label: 'Patrimonio Var. Rel.', value: record['Patrimonio Var. Rel.'] },
+            { label: 'Apalancamiento Var. Abs.', value: record['Apalancamiento Var. Abs.'] },
+            { label: 'Apalancamiento Var. Rel.', value: record['Apalancamiento Var. Rel.'] },
+            { label: 'Endeudamiento Var. Abs.', value: record['Endeudamiento Var. Abs.'] },
+            { label: 'Endeudamiento Var. Rel.', value: record['Endeudamiento Var. Rel.'] },
+            { label: 'BancoSaldo Var. Abs.', value: record['BancoSaldo Var. Abs.'] },
+            { label: 'BancoSaldo Var. Rel.', value: record['BancoSaldo Var. Rel.'] },
+            { label: 'Bienes Var. Abs.', value: record['Bienes Var. Abs.'] },
+            { label: 'Bienes Var. Rel.', value: record['Bienes Var. Rel.'] },
+            { label: 'Inversiones Var. Abs.', value: record['Inversiones Var. Abs.'] },
+            { label: 'Inversiones Var. Rel.', value: record['Inversiones Var. Rel.'] },
+            { label: 'Ingresos Var. Abs.', value: record['Ingresos Var. Abs.'] },
+            { label: 'Ingresos Var. Rel.', value: record['Ingresos Var. Rel.'] }
+        ].filter(field => field.value !== undefined && field.value !== null);
+        
+        if (variationFields.length === 0) return '';
+        
+        return `
+            <div class="detail-section">
+                <h3>${title}</h3>
+                <div class="variation-grid">
+                    ${variationFields.map(field => `
+                        <div class="variation-item">
+                            <strong>${field.label}:</strong>
+                            <span>${field.value}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Helper function to render yearly variation sections
+    function renderYearlyVariationSection(title, record, year) {
+        const yearlyFields = [
+            { label: `Activos Var. Abs. ${year}`, value: record[`${year} Activos Var. Abs.`] },
+            { label: `Activos Var. Rel. ${year}`, value: record[`${year} Activos Var. Rel.`] },
+            { label: `Pasivos Var. Abs. ${year}`, value: record[`${year} Pasivos Var. Abs.`] },
+            { label: `Pasivos Var. Rel. ${year}`, value: record[`${year} Pasivos Var. Rel.`] },
+            { label: `Patrimonio Var. Abs. ${year}`, value: record[`${year} Patrimonio Var. Abs.`] },
+            { label: `Patrimonio Var. Rel. ${year}`, value: record[`${year} Patrimonio Var. Rel.`] },
+            { label: `BancoSaldo Var. Abs. ${year}`, value: record[`${year} BancoSaldo Var. Abs.`] },
+            { label: `BancoSaldo Var. Rel. ${year}`, value: record[`${year} BancoSaldo Var. Rel.`] },
+            { label: `Bienes Var. Abs. ${year}`, value: record[`${year} Bienes Var. Abs.`] },
+            { label: `Bienes Var. Rel. ${year}`, value: record[`${year} Bienes Var. Rel.`] },
+            { label: `Inversiones Var. Abs. ${year}`, value: record[`${year} Inversiones Var. Abs.`] },
+            { label: `Inversiones Var. Rel. ${year}`, value: record[`${year} Inversiones Var. Rel.`] },
+            { label: `Ingresos Var. Abs. ${year}`, value: record[`${year} Ingresos Var. Abs.`] },
+            { label: `Ingresos Var. Rel. ${year}`, value: record[`${year} Ingresos Var. Rel.`] }
+        ].filter(field => field.value !== undefined && field.value !== null);
+        
+        if (yearlyFields.length === 0) return '';
+        
+        return `
+            <div class="detail-section">
+                <h3>${title}</h3>
+                <div class="variation-grid">
+                    ${yearlyFields.map(field => `
+                        <div class="variation-item">
+                            <strong>${field.label}:</strong>
+                            <span>${field.value}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Helper function to render yearly count variations
+    function renderYearlyCountVariationSection(title, record, year) {
+        const countVariationFields = [
+            { label: `Cant. Deudas Var. Abs. ${year}`, value: record[`${year} Cant_Deudas Var. Abs.`] },
+            { label: `Cant. Deudas Var. Rel. ${year}`, value: record[`${year} Cant_Deudas Var. Rel.`] },
+            { label: `Cant. Bancos Var. Abs. ${year}`, value: record[`${year} Cant_Bancos Var. Abs.`] },
+            { label: `Cant. Bancos Var. Rel. ${year}`, value: record[`${year} Cant_Bancos Var. Rel.`] },
+            { label: `Cant. Bienes Var. Abs. ${year}`, value: record[`${year} Cant_Bienes Var. Abs.`] },
+            { label: `Cant. Bienes Var. Rel. ${year}`, value: record[`${year} Cant_Bienes Var. Rel.`] },
+            { label: `Cant. Inversiones Var. Abs. ${year}`, value: record[`${year} Cant_Inversiones Var. Abs.`] },
+            { label: `Cant. Inversiones Var. Rel. ${year}`, value: record[`${year} Cant_Inversiones Var. Rel.`] },
+            { label: `Cant. Ingresos Var. Abs. ${year}`, value: record[`${year} Cant_Ingresos Var. Abs.`] },
+            { label: `Cant. Ingresos Var. Rel. ${year}`, value: record[`${year} Cant_Ingresos Var. Rel.`] }
+        ].filter(field => field.value !== undefined && field.value !== null);
+        
+        if (countVariationFields.length === 0) return '';
+        
+        return `
+            <div class="detail-section">
+                <h3>${title}</h3>
+                <div class="variation-grid">
+                    ${countVariationFields.map(field => `
+                        <div class="variation-item">
+                            <strong>${field.label}:</strong>
+                            <span>${field.value}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Format numbers with thousands separator
+    function formatNumber(num) {
+        if (num === undefined || num === null) return 'N/A';
+        return new Intl.NumberFormat('es-CO').format(num);
+    }
+
+    // Close modal
+    function closeModal() {
+        const modal = document.getElementById('detailModal') || document.getElementById('columnStatsModal');
+        if (modal) modal.remove();
+    }
+
+    // Export details to Excel
+    function exportDetailsToExcel() {
+        const modal = document.getElementById('detailModal');
+        if (!modal) return;
+        
+        // Get all the data from the modal
+        const data = [];
+        const sections = modal.querySelectorAll('.detail-section');
+        
+        sections.forEach(section => {
+            const sectionTitle = section.querySelector('h3').textContent;
+            const items = section.querySelectorAll('.detail-item, .variation-item');
+            
+            items.forEach(item => {
+                const label = item.querySelector('strong')?.textContent.replace(':', '') || '';
+                const value = item.querySelector('span')?.textContent || item.textContent.replace(label, '').replace(':', '').trim();
+                
+                if (label && value) {
+                    data.push({
+                        'Sección': sectionTitle,
+                        'Campo': label,
+                        'Valor': value
+                    });
+                }
+            });
+        });
+        
+        if (data.length === 0) {
+            alert('No hay datos para exportar');
+            return;
+        }
+        
+        // Create worksheet
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Detalles");
+        
+        // Get the user name from the modal title
+        const modalTitle = modal.querySelector('.modal-header h2').textContent;
+        const fileName = modalTitle.replace('Detalles Completo - ', '').replace(/[\/\\?%*:|"<>]/g, '-') + '.xlsx';
+        
+        // Export to file
+        XLSX.writeFile(workbook, fileName);
+    }
+
+    // Public API
+    return {
+        viewDetails,
+        closeModal,
+        exportDetailsToExcel
+    };
+})();
+'@
+
+# 5. statsModal.js - Handles column statistics functionality
+Set-Content -Path "$modulesDir/statsModal.js" -Value @'
+// Column statistics module
+const StatsModal = (() => {
+    // Global variables for values pagination
+    let currentValuesPage = 1;
+    const valuesPerPage = 50;
+    let currentValuesSearch = '';
+    let currentValuesColumn = '';
+
+    // Show column statistics
+    function showColumnStats(columnName) {
+        const { allData } = App.getData();
+        
+        // Collect all values for this column
+        const values = allData.map(item => item[columnName]);
+        
+        // Calculate basic statistics
+        const numericValues = values
+            .map(v => typeof v === 'string' ? parseFloat(v.replace(/[^\d.-]/g, '')) : parseFloat(v))
+            .filter(v => !isNaN(v));
+            
+        const isNumeric = numericValues.length > 0;
+        
+        let stats = {
+            count: values.length,
+            uniqueCount: new Set(values.filter(v => v !== undefined && v !== null)).size,
+            min: null,
+            max: null,
+            avg: null,
+            commonValues: [],
+            allUniqueValues: []
+        };
+        
+        if (isNumeric) {
+            stats.min = Math.min(...numericValues);
+            stats.max = Math.max(...numericValues);
+            stats.avg = numericValues.reduce((a, b) => a + b, 0) / numericValues.length;
+        }
+        
+        // Find most common values (top 5)
+        const valueCounts = {};
+        values.forEach(v => {
+            if (v !== undefined && v !== null) {
+                const val = typeof v === 'string' ? v.trim() : v;
+                valueCounts[val] = (valueCounts[val] || 0) + 1;
+            }
+        });
+        
+        stats.commonValues = Object.entries(valueCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([value, count]) => ({ value, count }));
+        
+        // Get all unique values (sorted)
+        stats.allUniqueValues = Object.keys(valueCounts)
+            .sort((a, b) => {
+                if (isNumeric) {
+                    return parseFloat(a) - parseFloat(b);
+                }
+                return a.localeCompare(b);
+            });
+        
+        // Format numbers for display
+        const formatNumber = (num) => {
+            if (num === null || num === undefined) return 'N/A';
+            if (typeof num === 'string') return num;
+            if (Math.abs(num) >= 1000000) {
+                return '$' + (num / 1000000).toFixed(2) + 'M';
+            }
+            return new Intl.NumberFormat('es-CO').format(num);
+        };
+        
+        // Create modal HTML with tabs
+        const modalHTML = `
+            <div id="columnStatsModal" class="modal-overlay">
+                <div class="modal-content" style="max-width: 800px;">
+                    <div class="modal-header">
+                        <h2>📊 Estadísticas de Columna: ${columnName}</h2>
+                        <button onclick="DetailsModal.closeModal()" class="close-button">×</button>
+                    </div>
+                    
+                    <div class="modal-tabs">
+                        <button class="tab-btn active" onclick="StatsModal.switchTab('stats', this)">Estadísticas</button>
+                        <button class="tab-btn" onclick="StatsModal.switchTab('values', this)">Todos los Valores (${stats.allUniqueValues.length})</button>
+                    </div>
+                    
+                    <div class="modal-body">
+                        <div id="stats-tab" class="tab-content active">
+                            <div class="stats-grid">
+                                <div class="stat-item">
+                                    <strong>Total de valores:</strong>
+                                    <span>${stats.count}</span>
+                                </div>
+                                <div class="stat-item">
+                                    <strong>Valores únicos:</strong>
+                                    <span>${stats.uniqueCount}</span>
+                                </div>
+                                ${isNumeric ? `
+                                <div class="stat-item">
+                                    <strong>Promedio:</strong>
+                                    <span>${formatNumber(stats.avg)}</span>
+                                </div>
+                                <div class="stat-item">
+                                    <strong>Mínimo:</strong>
+                                    <span>${formatNumber(stats.min)}</span>
+                                </div>
+                                <div class="stat-item">
+                                    <strong>Máximo:</strong>
+                                    <span>${formatNumber(stats.max)}</span>
+                                </div>
+                                ` : ''}
+                            </div>
+                            
+                            <div class="common-values-section">
+                                <h3>Valores más comunes</h3>
+                                <div class="common-values-grid">
+                                    ${stats.commonValues.map(item => `
+                                        <div class="common-value-item">
+                                            <span class="value">${formatNumber(item.value)}</span>
+                                            <span class="count">${item.count} (${Math.round((item.count / stats.count) * 100)}%)</span>
+                                            <button onclick="StatsModal.applyCommonValueFilter('${columnName}', '${item.value.replace(/'/g, "\\'")}')" 
+                                                    class="apply-filter-btn">
+                                                Filtrar
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            
+                            <div class="quick-filter-actions">
+                                <button onclick="StatsModal.applyMinMaxFilter('${columnName}', 'min')" class="action-btn">
+                                    Filtrar por mínimo
+                                </button>
+                                <button onclick="StatsModal.applyMinMaxFilter('${columnName}', 'max')" class="action-btn">
+                                    Filtrar por máximo
+                                </button>
+                                <button onclick="StatsModal.applyAvgFilter('${columnName}')" class="action-btn" ${!isNumeric ? 'disabled' : ''}>
+                                    Filtrar por promedio
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="values-tab" class="tab-content">
+                            <div class="values-search">
+                                <input type="text" id="values-search-input" placeholder="Buscar valores..." 
+                                       oninput="StatsModal.searchValues('${columnName}')">
+                                <div class="values-count">
+                                    Mostrando <span id="values-showing">0</span> de ${stats.allUniqueValues.length} valores
+                                </div>
+                            </div>
+                            <div class="values-container" id="values-container">
+                                <!-- Values will be loaded here with pagination -->
+                            </div>
+                            <div class="values-pagination">
+                                <button id="values-prev" onclick="StatsModal.navigateValuesPage(-1)" disabled>Anterior</button>
+                                <span id="values-page-info">Página 1</span>
+                                <button id="values-next" onclick="StatsModal.navigateValuesPage(1)">Siguiente</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Initialize values tab
+        currentValuesPage = 1;
+        currentValuesSearch = '';
+        currentValuesColumn = columnName;
+        renderValuesPage();
+    }
+
+    // Render values page with pagination
+    function renderValuesPage() {
+        const container = document.getElementById('values-container');
+        if (!container) return;
+        
+        const { allData } = App.getData();
+        const columnValues = allData.map(item => item[currentValuesColumn]);
+        const valueCounts = {};
+        columnValues.forEach(v => {
+            if (v !== undefined && v !== null) {
+                const val = typeof v === 'string' ? v.trim() : v;
+                valueCounts[val] = (valueCounts[val] || 0) + 1;
+            }
+        });
+        
+        let allValues = Object.keys(valueCounts)
+            .sort((a, b) => {
+                const isNumeric = !isNaN(parseFloat(a)) && !isNaN(parseFloat(b));
+                if (isNumeric) {
+                    return parseFloat(a) - parseFloat(b);
+                }
+                return a.localeCompare(b);
+            });
+        
+        // Apply search filter
+        if (currentValuesSearch) {
+            const searchTerm = currentValuesSearch.toLowerCase();
+            allValues = allValues.filter(v => 
+                String(v).toLowerCase().includes(searchTerm)
+            );
+        }
+        
+        const totalValues = allValues.length;
+        const totalPages = Math.ceil(totalValues / valuesPerPage);
+        const startIdx = (currentValuesPage - 1) * valuesPerPage;
+        const endIdx = Math.min(startIdx + valuesPerPage, totalValues);
+        const pageValues = allValues.slice(startIdx, endIdx);
+        
+        // Update UI
+        container.innerHTML = pageValues.map(value => `
+            <div class="value-item">
+                <span class="value">${formatValueForDisplay(value)}</span>
+                <span class="count">${valueCounts[value]} (${Math.round((valueCounts[value] / columnValues.length) * 100)}%)</span>
+                <button onclick="StatsModal.applyCommonValueFilter('${currentValuesColumn}', '${value.replace(/'/g, "\\'")}')" 
+                        class="apply-filter-btn">
+                    Filtrar
+                </button>
+            </div>
+        `).join('');
+        
+        document.getElementById('values-showing').textContent = `${startIdx + 1}-${endIdx}`;
+        document.getElementById('values-page-info').textContent = `Página ${currentValuesPage} de ${totalPages}`;
+        document.getElementById('values-prev').disabled = currentValuesPage <= 1;
+        document.getElementById('values-next').disabled = currentValuesPage >= totalPages;
+    }
+
+    // Format value for display
+    function formatValueForDisplay(value) {
+        if (value === null || value === undefined) return 'N/A';
+        if (typeof value === 'string') return value;
+        if (Math.abs(value) >= 1000000) {
+            return '$' + (value / 1000000).toFixed(2) + 'M';
+        }
+        return new Intl.NumberFormat('es-CO').format(value);
+    }
+
+    // Search values
+    function searchValues(columnName) {
+        currentValuesSearch = document.getElementById('values-search-input').value;
+        currentValuesPage = 1;
+        currentValuesColumn = columnName;
+        renderValuesPage();
+    }
+
+    // Navigate values page
+    function navigateValuesPage(direction) {
+        currentValuesPage += direction;
+        renderValuesPage();
+    }
+
+    // Switch tab
+    function switchTab(tabId, button) {
+        // Hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Deactivate all tab buttons
+        document.querySelectorAll('.modal-tabs .tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Activate selected tab
+        document.getElementById(`${tabId}-tab`).classList.add('active');
+        button.classList.add('active');
+        
+        // If switching to values tab and not yet loaded
+        if (tabId === 'values' && document.getElementById('values-container').innerHTML === '') {
+            renderValuesPage();
+        }
+    }
+
+    // Apply common value filter
+    function applyCommonValueFilter(columnName, value) {
+        try {
+            // Determine if the value is numeric
+            const isNumeric = !isNaN(parseFloat(value)) && isFinite(value);
+            
+            // Set the operator based on value type
+            const operator = isNumeric ? '=' : 'contains';
+            
+            // Add filter for this value
+            document.getElementById('column').value = columnName;
+            document.getElementById('operator').value = operator;
+            document.getElementById('value1').value = value;
+            
+            FilterManager.addFilter();
+            DetailsModal.closeModal();
+        } catch (error) {
+            console.error('Error applying common value filter:', error);
+            alert('Error al aplicar el filtro. Por favor intente nuevamente.');
+        }
+    }
+
+    // Apply min/max filter
+    function applyMinMaxFilter(columnName, type) {
+        const { allData } = App.getData();
+        const columnValues = allData.map(item => parseFloat(item[columnName])).filter(v => !isNaN(v));
+        if (columnValues.length === 0) return;
+        
+        const value = type === 'min' ? Math.min(...columnValues) : Math.max(...columnValues);
+        
+        document.getElementById('column').value = columnName;
+        document.getElementById('operator').value = '=';
+        document.getElementById('value1').value = value;
+        FilterManager.addFilter();
+        DetailsModal.closeModal();
+    }
+
+    // Apply average filter
+    function applyAvgFilter(columnName) {
+        const { allData } = App.getData();
+        const columnValues = allData.map(item => parseFloat(item[columnName])).filter(v => !isNaN(v));
+        if (columnValues.length === 0) return;
+        
+        const avg = columnValues.reduce((a, b) => a + b, 0) / columnValues.length;
+        
+        document.getElementById('column').value = columnName;
+        document.getElementById('operator').value = '>=';
+        document.getElementById('value1').value = avg.toFixed(2);
+        FilterManager.addFilter();
+        DetailsModal.closeModal();
+    }
+
+    // Public API
+    return {
+        showColumnStats,
+        renderValuesPage,
+        searchValues,
+        navigateValuesPage,
+        switchTab,
+        applyCommonValueFilter,
+        applyMinMaxFilter,
+        applyAvgFilter
+    };
+})();
+'@
+
+# 6. excelUpload.js - Handles Excel file upload functionality
+Set-Content -Path "$modulesDir/excelUpload.js" -Value @'
+// Excel upload module
+const ExcelUpload = (() => {
+    // Handle file upload and processing
+    async function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Show loading state
+        App.setState({ processingData: true });
+        document.querySelector('#results tbody').innerHTML = `
+            <tr>
+                <td colspan="37" class="loading">Procesando archivo Excel, por favor espere...</td>
+            </tr>
+        `;
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Error en el análisis del archivo');
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                // Reload the data after processing
+                await App.loadData();
+                alert('Archivo procesado correctamente. Los datos han sido actualizados.');
+            } else {
+                throw new Error(result.message || 'Error desconocido al procesar el archivo');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            document.querySelector('#results tbody').innerHTML = `
+                <tr>
+                    <td colspan="37">Error al procesar el archivo: ${error.message}</td>
+                </tr>
+            `;
+        } finally {
+            App.setState({ processingData: false });
+            // Reset the file input
+            event.target.value = '';
+        }
+    }
+
+    // Process Excel file with passwords
+    async function processExcelFile(file, openPassword, modifyPassword) {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (openPassword) formData.append('openPassword', openPassword);
+        if (modifyPassword) formData.append('modifyPassword', modifyPassword);
+    
+        try {
+            const response = await fetch('http://localhost:8000/upload', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+    
+            if (!response.ok) {
+                const errorData = await response.json();
+                if (errorData.message && errorData.message.toLowerCase().includes('contraseña')) {
+                    throw new Error('Intenta de nuevo');
+                }
+                throw new Error(errorData.message || 'Error desconocido');
+            }
+    
+            return await response.json();
+        } catch (error) {
+            console.error("Fetch error:", error);
+            throw error; // This will be caught by the calling function
+        }
+    }
+
+    // Toggle password visibility
     function togglePassword(inputId) {
         const input = document.getElementById(inputId);
         const toggle = input.nextElementSibling;
@@ -2958,6 +4353,7 @@ async function loadData() {
         }
     }
 
+    // Show password error
     function showPasswordError(message) {
         const errorElement = document.getElementById('passwordError');
         errorElement.textContent = message;
@@ -2977,6 +4373,7 @@ async function loadData() {
         });
     }
 
+    // Clear password error
     function clearPasswordError() {
         document.getElementById('passwordError').textContent = '';
         document.querySelectorAll('.password-input').forEach(input => {
@@ -2984,8 +4381,9 @@ async function loadData() {
         });
     }
 
-    // Update your analyzeButton click handler to handle password errors
-    document.getElementById('analyzeButton').addEventListener('click', async function() {
+    // Handle analyze button click
+    async function handleAnalyzeButtonClick() {
+        const selectedFile = App.getSelectedFile();
         if (!selectedFile) {
             alert('Por favor seleccione un archivo primero');
             return;
@@ -3017,14 +4415,14 @@ async function loadData() {
                 document.getElementById('excelUpload').value = '';
                 document.getElementById('excelOpenPassword').value = '';
                 document.getElementById('excelModifyPassword').value = '';
-                selectedFile = null;
+                App.setSelectedFile(null);
                 
                 setTimeout(() => {
                     loadingBarContainer.style.display = 'none';
                     loadingBar.style.width = '0%';
                 }, 1000);
                 
-                await loadData();
+                await App.loadData();
             } else {
                 throw new Error(result.message || 'Error desconocido al procesar el archivo');
             }
@@ -3033,7 +4431,7 @@ async function loadData() {
             loadingBarContainer.style.display = 'none';
             loadingBar.style.width = '0%';
             
-            // This is where we simplify the error message
+            // Simplify the error message
             if (error.message.toLowerCase().includes('intenta de nuevo') || 
                 error.message.toLowerCase().includes('password') || 
                 error.message.toLowerCase().includes('contraseña')) {
@@ -3044,1389 +4442,161 @@ async function loadData() {
             }
             statusElement.style.color = 'red';
         }
-    });
-    
-    // Add this new function to handle file processing
-    async function processExcelFile(file, openPassword, modifyPassword) {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (openPassword) formData.append('openPassword', openPassword);
-        if (modifyPassword) formData.append('modifyPassword', modifyPassword);
-    
-        try {
-            const response = await fetch('http://localhost:8000/upload', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'application/json'
-                }
-            });
-    
-            if (!response.ok) {
-                const errorData = await response.json();
-                if (errorData.message && errorData.message.toLowerCase().includes('contraseña')) {
-                    throw new Error('Intenta de nuevo');
-                }
-                throw new Error(errorData.message || 'Error desconocido');
-            }
-    
-            return await response.json();
-        } catch (error) {
-            console.error("Fetch error:", error);
-            throw error; // This will be caught by the calling function
-        }
     }
-    
 
-function changeDataSource() {
-    const dataSourceSelect = document.getElementById('dataSource');
-    currentDataSource = dataSourceSelect.value;
-    
-    // Clear existing filters
-    filters.length = 0;
-    renderFilters();
-    
-    // Reset sort
-    currentSortColumn = '';
-    sortDirection = 'asc';
-    
-    // Reload data
-    loadData();
-    
-    // Clear any highlights
-    document.querySelectorAll('.highlighted-column').forEach(el => {
-        el.classList.remove('highlighted-column');
-    });
-    document.getElementById('column').classList.remove('highlighted');
-    currentFilterColumn = '';
-    lastSelectedColumn = '';
-    
-    // Reset column dropdown
-    document.getElementById('column').selectedIndex = 0;
-}
+    // Public API
+    return {
+        handleFileUpload,
+        processExcelFile,
+        togglePassword,
+        showPasswordError,
+        clearPasswordError,
+        handleAnalyzeButtonClick
+    };
+})();
 
-// Set up event listeners
-function setupEventListeners() {
-    operatorSelect.addEventListener('change', toggleValue2Input);
-    
-    document.getElementById('column').addEventListener('change', function() {
-        currentFilterColumn = this.value;
-        if (this.value) {
-            this.classList.add('highlighted');
-        } else {
-            this.classList.remove('highlighted');
-        }
+// Set up event listeners for Excel upload
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('excelUpload').addEventListener('change', ExcelUpload.handleFileUpload);
+    document.getElementById('analyzeButton').addEventListener('click', ExcelUpload.handleAnalyzeButtonClick);
+});
+'@
+
+# 7. exportManager.js - Handles data export functionality
+Set-Content -Path "$modulesDir/exportManager.js" -Value @'
+// Export management module
+const ExportManager = (() => {
+    // Export to Excel
+    function exportToExcel() {
+        const { filteredData } = App.getData();
         
-        // Auto-focus the value input for quick filtering
-        if (this.value && lastSelectedColumn !== this.value) {
-            document.getElementById('value1').focus();
-        }
-        lastSelectedColumn = this.value;
-    });
-    // listener to excelupload
-    document.getElementById('excelUpload').addEventListener('change', function(e) {
-        const statusElement = document.getElementById('fileUploadStatus');
-        const passwordContainer = document.getElementById('passwordContainer');
-        
-        if (this.files.length > 0) {
-            selectedFile = this.files[0];
-            statusElement.textContent = `Archivo seleccionado: ${selectedFile.name}`;
-            statusElement.style.color = '#0b00a2';
-            passwordContainer.style.display = 'block'; // Show both password fields
-        } else {
-            selectedFile = null;
-            statusElement.textContent = '';
-            passwordContainer.style.display = 'none'; // Hide both password fields
-        }
-    });
-}
-
-// excel upload fucntion
-async function handleFileUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // Show loading state
-    processingData = true;
-    document.querySelector('#results tbody').innerHTML = `
-        <tr>
-            <td colspan="37" class="loading">Procesando archivo Excel, por favor espere...</td>
-        </tr>
-    `;
-
-    try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch('/upload', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) {
-            throw new Error('Error en el análisis del archivo');
-        }
-
-        const result = await response.json();
-        
-        if (result.success) {
-            // Reload the data after processing
-            await loadData();
-            alert('Archivo procesado correctamente. Los datos han sido actualizados.');
-        } else {
-            throw new Error(result.message || 'Error desconocido al procesar el archivo');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        document.querySelector('#results tbody').innerHTML = `
-            <tr>
-                <td colspan="37">Error al procesar el archivo: ${error.message}</td>
-            </tr>
-        `;
-    } finally {
-        processingData = false;
-        // Reset the file input
-        event.target.value = '';
-    }
-}
-
-// Toggle second value input for 'between' operator
-function toggleValue2Input() {
-    value2Input.style.display = operatorSelect.value === 'between' ? 'inline-block' : 'none';
-}
-
-// Add a new filter
-function addFilter() {
-    const column = document.getElementById('column').value;
-    const operator = operatorSelect.value;
-    const value1 = document.getElementById('value1').value.trim();
-    let value2 = '';
-    
-    if (!column || !operator || !value1) {
-        alert('Por favor complete todos los campos del filtro');
-        return;
-    }
-    
-    if (operator === 'between') {
-        value2 = document.getElementById('value2').value.trim();
-        if (!value2) {
-            alert('Por favor complete el segundo valor para el filtro "Entre"');
+        if (filteredData.length === 0) {
+            alert('No hay datos para exportar');
             return;
         }
-    }
-    
-    // Check if we should use string comparison instead of numeric
-    const isNumericComparison = ['>', '<', '=', '>=', '<=', 'between'].includes(operator) && 
-                               !isNaN(parseFloat(value1)) && 
-                               (operator !== 'between' || !isNaN(parseFloat(value2)));
-    
-    filters.push({ 
-        column, 
-        operator, 
-        value1, 
-        value2,
-        isNumericComparison  // Add this flag to the filter
-    });
-    
-    renderFilters();
-    applyFilters();
-    
-    // Highlight the column in the table
-    highlightColumn(column);
-    
-    // Keep the column selected in the dropdown
-    lastSelectedColumn = column;
-    currentFilterColumn = column;
-}
-
-function sortTable(columnName, direction) {
-    filteredData.sort((a, b) => {
-        let valA = a[columnName];
-        let valB = b[columnName];
         
-        // Handle numeric values
-        if (!isNaN(parseFloat(valA)) && !isNaN(parseFloat(valB))) {
-            valA = parseFloat(valA);
-            valB = parseFloat(valB);
-            return direction === 'asc' ? valA - valB : valB - valA;
+        // Use the original data with trend icons
+        const exportData = filteredData.map(item => ({...item}));
+        
+        // Create worksheet
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Datos Filtrados");
+        
+        // Export to file
+        XLSX.writeFile(workbook, 'datos_filtrados.xlsx');
+    }
+
+    // Export frozen columns to Excel
+    function exportFrozenColumnsToExcel() {
+        const { filteredData } = App.getData();
+        const { frozenColumns } = App.getState();
+        
+        if (filteredData.length === 0) {
+            alert('No hay datos para exportar');
+            return;
         }
         
-        // Handle string values
-        if (typeof valA === 'string' && typeof valB === 'string') {
-            return direction === 'asc' 
-                ? valA.localeCompare(valB) 
-                : valB.localeCompare(valA);
+        if (frozenColumns.length === 0) {
+            alert('No hay columnas congeladas para exportar');
+            return;
         }
         
-        return 0;
-    });
-    
-    renderTable();
-    
-    // Re-apply column highlight if there's a current filter column
-    if (currentFilterColumn) {
-        highlightColumn(currentFilterColumn);
-    }
-}
-
-// Highlight table column
-function highlightColumn(columnName) {
-    // Remove any existing highlights
-    const headers = document.querySelectorAll('#results th');
-    const cells = document.querySelectorAll('#results td');
-    
-    headers.forEach(header => header.classList.remove('highlighted-column'));
-    cells.forEach(cell => cell.classList.remove('highlighted-column'));
-    
-    // Find the column index
-    const columnMap = {
-        'Usuario': 4,
-        'Nombre': 0,
-        'Compañía': 2,
-        'Cargo': 3,
-        'Año Declaración': 1,
-        'Activos': 5,
-        'Pasivos': 6,
-        'Patrimonio': 7,
-        'Apalancamiento': 8,
-        'Endeudamiento': 9,
-        'Cant_Deudas': 10,
-        'BancoSaldo': 11,
-        'Cant_Bancos': 12,
-        'Bienes': 13,
-        'Cant_Bienes': 14,
-        'Inversiones': 15,
-        'Cant_Inversiones': 16,
-        'Ingresos': 17,
-        'Cant_Ingresos': 18,
-        'Activos Var. Abs.': 19,
-        'Pasivos Var. Abs.': 20,
-        'Patrimonio Var. Abs.': 21,
-        'Apalancamiento Var. Abs.': 22,
-        'Endeudamiento Var. Abs.': 23,
-        'BancoSaldo Var. Abs.': 24,
-        'Bienes Var. Abs.': 25,
-        'Inversiones Var. Abs.': 26,
-        'Ingresos Var. Abs.': 27,
-        'Activos Var. Rel.': 28,
-        'Pasivos Var. Rel.': 29,
-        'Patrimonio Var. Rel.': 30,
-        'Apalancamiento Var. Rel.': 31,
-        'Endeudamiento Var. Rel.': 32,
-        'BancoSaldo Var. Rel.': 33,
-        'Bienes Var. Rel.': 34,
-        'Inversiones Var. Rel.': 35,
-        'Ingresos Var. Rel.': 36
-    };
-    
-    const columnIndex = columnMap[columnName];
-    if (columnIndex === undefined) return;
-    
-    // Highlight header
-    if (headers[columnIndex]) {
-        headers[columnIndex].classList.add('highlighted-column');
-    }
-    
-    // Highlight cells - including frozen columns
-    document.querySelectorAll(`#results tr > *:nth-child(${columnIndex + 1})`).forEach(cell => {
-        cell.classList.add('highlighted-column');
-    });
-    
-    // Update current filter column
-    currentFilterColumn = columnName;
-    lastSelectedColumn = columnName;
-}
-
-function removeFilter(index) {
-    // Remove the filter at the specified index
-    filters.splice(index, 1);
-    
-    // Re-render the remaining filters
-    renderFilters();
-    
-    // Re-apply the remaining filters
-    applyFilters();
-    
-    // If no filters remain, clear the highlights
-    if (filters.length === 0) {
-        document.querySelectorAll('.highlighted-column').forEach(el => {
-            el.classList.remove('highlighted-column');
-        });
-        document.getElementById('column').classList.remove('highlighted');
-        currentFilterColumn = '';
-        lastSelectedColumn = '';
-    }
-}
-
-// Render active filters
-function renderFilters() {
-    const filtersContainer = document.getElementById('filters');
-    filtersContainer.innerHTML = filters.map((filter, index) => `
-        <div class="filter-tag">
-            ${filter.column} ${getOperatorSymbol(filter.operator)} ${filter.value1}
-            ${filter.operator === 'between' ? ` y ${filter.value2}` : ''}
-            <button onclick="removeFilter(${index})">×</button>
-        </div>
-    `).join('');
-}
-
-// Get operator symbol for display
-function getOperatorSymbol(operator) {
-    const symbols = {
-        '>': '>',
-        '<': '<',
-        '=': '=',
-        '>=': '≥',
-        '<=': '≤',
-        'between': 'entre',
-        'contains': 'contiene'
-    };
-    return symbols[operator] || operator;
-}
-
-// Remove a filter
-function applyFilters() {
-    if (filters.length === 0) {
-        filteredData = [...allData];
-        renderTable();
-        return;
-    }
-    
-    filteredData = allData.filter(item => {
-        return filters.every(filter => {
-            const itemValue = item[filter.column];
-            if (itemValue === undefined || itemValue === null) return false;
-            
-            // Handle string comparison
-            if (!filter.isNumericComparison) {
-                const itemStr = String(itemValue).toLowerCase();
-                const filterStr = filter.value1.toLowerCase();
-                
-                switch (filter.operator) {
-                    case 'contains': 
-                        return itemStr.includes(filterStr);
-                    case '=':
-                        return itemStr === filterStr;
-                    default:
-                        return true;
-                }
-            }
-            
-            // Handle numeric comparison
-            let numericValue;
-            if (typeof itemValue === 'string' && itemValue.includes('%')) {
-                numericValue = parseFloat(itemValue.replace('%', ''));
-            } else {
-                numericValue = parseFloat(itemValue);
-            }
-            
-            const filterValue1 = parseFloat(filter.value1);
-            const filterValue2 = parseFloat(filter.value2);
-            
-            switch (filter.operator) {
-                case '>': return numericValue > filterValue1;
-                case '<': return numericValue < filterValue1;
-                case '=': return numericValue === filterValue1;
-                case '>=': return numericValue >= filterValue1;
-                case '<=': return numericValue <= filterValue1;
-                case 'between': 
-                    return numericValue >= filterValue1 && numericValue <= filterValue2;
-                case 'contains':
-                    return String(itemValue).toLowerCase().includes(filter.value1.toLowerCase());
-                default: return true;
-            }
-        });
-    });
-    
-    renderTable();
-    
-    // Re-apply column highlight if there's a current filter column
-    if (currentFilterColumn) {
-        highlightColumn(currentFilterColumn);
-    }
-}
-
-// Handle predetermined filters
-function applyPredeterminedFilter(column, operator, value1) {
-    // Check if this filter already exists
-    const existingIndex = filters.findIndex(f => 
-        f.column === column && f.operator === operator && f.value1 === value1
-    );
-    
-    if (existingIndex === -1) {
-        // Add new filter
-        filters.push({ column, operator, value1 });
-        
-        // Highlight the button
-        const buttons = document.querySelectorAll('.filter-buttons button');
-        buttons.forEach(button => {
-            if (button.textContent.includes(column) && 
-                button.textContent.includes(operator) &&
-                button.textContent.includes(value1)) {
-                button.classList.add('active');
-            }
-        });
-    } else {
-        // Remove existing filter
-        filters.splice(existingIndex, 1);
-        
-        // Remove highlight from button
-        const buttons = document.querySelectorAll('.filter-buttons button');
-        buttons.forEach(button => {
-            if (button.textContent.includes(column) && 
-                button.textContent.includes(operator) &&
-                button.textContent.includes(value1)) {
-                button.classList.remove('active');
-            }
-        });
-    }
-    
-    renderFilters();
-    applyFilters();
-    highlightColumn(column);
-}
-
-// Clear all filters
-function clearFilters() {
-    // Clear the filters array
-    filters.length = 0;
-    
-    // Reset the filter form inputs
-    document.getElementById('column').value = '';
-    document.getElementById('operator').value = '>';
-    document.getElementById('value1').value = '';
-    document.getElementById('value2').value = '';
-    document.getElementById('value2').style.display = 'none';
-    
-    // Reset the UI
-    renderFilters();
-    filteredData = [...allData];
-    renderTable();
-    
-    // Clear button highlights
-    document.querySelectorAll('.filter-buttons button').forEach(button => {
-        button.classList.remove('active');
-    });
-    
-    // Clear column highlights
-    document.querySelectorAll('.highlighted-column').forEach(el => {
-        el.classList.remove('highlighted-column');
-    });
-    
-    // Reset column dropdown
-    document.getElementById('column').classList.remove('highlighted');
-    currentFilterColumn = '';
-    lastSelectedColumn = '';
-    
-    // Reset sort indicators
-    document.querySelectorAll('#results th .sort-icon').forEach(icon => {
-        icon.textContent = '↕';
-    });
-    document.querySelectorAll('#results th').forEach(th => {
-        th.classList.remove('sorted-asc', 'sorted-desc');
-    });
-    
-    // Reset sort state
-    currentSortColumn = '';
-    sortDirection = 'asc';
-}
-
-// Render the data table
-function renderTable() {
-    const tbody = document.querySelector('#results tbody');
-    
-    if (filteredData.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="37">Generando datos desde el archivo excel</td>
-            </tr>
-        `;
-        return;
-    }
-    
-    tbody.innerHTML = filteredData.map(item => {
-        // Function to format cell with color based on value
-        const formatCell = (value, isPercentage = false) => {
-            if (value === undefined || value === null || value === '') return '';
-            
-            // Remove trend icons if present
-            const cleanValue = String(value).replace(/[📈📉➡️]/g, '').trim();
-            
-            // Try to parse as number
-            const numValue = parseFloat(cleanValue.replace('%', '').replace(/[^\d.-]/g, ''));
-            if (isNaN(numValue)) return value;
-            
-            // Format number
-            let formattedValue;
-            if (isPercentage) {
-                formattedValue = numValue.toFixed(2) + '%';
-            } else if (Math.abs(numValue) >= 1000000) {
-                formattedValue = '$' + (numValue / 1000000).toFixed(2) + 'M';
-            } else {
-                formattedValue = new Intl.NumberFormat('es-CO').format(numValue);
-            }
-            
-            // Determine color - only red for negative, black otherwise
-            const color = numValue < 0 ? 'color: #dc3545;' : 'color: #000;';
-            
-            return `<span style="${color}">${formattedValue}</span>`;
+        // Create a mapping of column indices to column names
+        const columnMap = {
+            0: 'Nombre',
+            1: 'Año Declaración',
+            2: 'Compañía',
+            3: 'Cargo',
+            4: 'Usuario',
+            5: 'Activos',
+            6: 'Pasivos',
+            7: 'Patrimonio',
+            8: 'Apalancamiento',
+            9: 'Endeudamiento',
+            10: 'Cant_Deudas',
+            11: 'BancoSaldo',
+            12: 'Cant_Bancos',
+            13: 'Bienes',
+            14: 'Cant_Bienes',
+            15: 'Inversiones',
+            16: 'Cant_Inversiones',
+            17: 'Ingresos',
+            18: 'Cant_Ingresos',
+            19: 'Activos Var. Abs.',
+            20: 'Pasivos Var. Abs.',
+            21: 'Patrimonio Var. Abs.',
+            22: 'Apalancamiento Var. Abs.',
+            23: 'Endeudamiento Var. Abs.',
+            24: 'BancoSaldo Var. Abs.',
+            25: 'Bienes Var. Abs.',
+            26: 'Inversiones Var. Abs.',
+            27: 'Ingresos Var. Abs.',
+            28: 'Activos Var. Rel.',
+            29: 'Pasivos Var. Rel.',
+            30: 'Patrimonio Var. Rel.',
+            31: 'Apalancamiento Var. Rel.',
+            32: 'Endeudamiento Var. Rel.',
+            33: 'BancoSaldo Var. Rel.',
+            34: 'Bienes Var. Rel.',
+            35: 'Inversiones Var. Rel.',
+            36: 'Ingresos Var. Rel.'
         };
         
-        return `
-            <tr>
-                <td>${formatCell(item.Nombre)}</td>
-                <td>${formatCell(item['Año Declaración'])}</td>
-                <td>${formatCell(item['Compañía'])}</td>
-                <td>${formatCell(item.Cargo)}</td>
-                <td>${formatCell(item.Usuario)}</td>
-                <td>${formatCell(item.Activos)}</td>
-                <td>${formatCell(item.Pasivos)}</td>
-                <td>${formatCell(item.Patrimonio)}</td>
-                <td>${formatCell(item.Apalancamiento, true)}</td>
-                <td>${formatCell(item.Endeudamiento, true)}</td>
-                <td>${formatCell(item['Cant_Deudas'])}</td>
-                <td>${formatCell(item.BancoSaldo)}</td>
-                <td>${formatCell(item.Cant_Bancos)}</td>
-                <td>${formatCell(item.Bienes)}</td>
-                <td>${formatCell(item.Cant_Bienes)}</td>
-                <td>${formatCell(item.Inversiones)}</td>
-                <td>${formatCell(item.Cant_Inversiones)}</td>
-                <td>${formatCell(item.Ingresos)}</td>
-                <td>${formatCell(item.Cant_Ingresos)}</td>
-                <td>${formatCell(item['Activos Var. Abs.'])}</td>
-                <td>${formatCell(item['Pasivos Var. Abs.'])}</td>
-                <td>${formatCell(item['Patrimonio Var. Abs.'])}</td>
-                <td>${formatCell(item['Apalancamiento Var. Abs.'], true)}</td>
-                <td>${formatCell(item['Endeudamiento Var. Abs.'], true)}</td>
-                <td>${formatCell(item['BancoSaldo Var. Abs.'])}</td>
-                <td>${formatCell(item['Bienes Var. Abs.'])}</td>
-                <td>${formatCell(item['Inversiones Var. Abs.'])}</td>
-                <td>${formatCell(item['Ingresos Var. Abs.'])}</td>
-                <td>${formatCell(item['Activos Var. Rel.'], true)}</td>
-                <td>${formatCell(item['Pasivos Var. Rel.'], true)}</td>
-                <td>${formatCell(item['Patrimonio Var. Rel.'], true)}</td>
-                <td>${formatCell(item['Apalancamiento Var. Rel.'], true)}</td>
-                <td>${formatCell(item['Endeudamiento Var. Rel.'], true)}</td>
-                <td>${formatCell(item['BancoSaldo Var. Rel.'], true)}</td>
-                <td>${formatCell(item['Bienes Var. Rel.'], true)}</td>
-                <td>${formatCell(item['Inversiones Var. Rel.'], true)}</td>
-                <td>${formatCell(item['Ingresos Var. Rel.'], true)}</td>
-                <td style="position: sticky; right: 0; background-color: white;">
-                    <button onclick="viewDetails('${item.Usuario}', ${item['Año Declaración']})" style="background-color: #0b00a2; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;
-                    ">Ver</button>
-                </td>
-            </tr>
-        `;
-    }).join('');
-
-    // After rendering, update frozen columns
-    if (frozenColumns.length > 0) {
-        updateFrozenColumns();
-    }
-    
-    // Ensure proper z-index stacking
-    document.querySelectorAll('#results thead th').forEach(th => {
-        th.style.zIndex = '20';
-    });
-}
-
-// Track frozen columns
-
-function toggleFreezeColumn(columnIndex) {
-    const columnCells = document.querySelectorAll(`#results tr > *:nth-child(${columnIndex + 1})`);
-    const freezeBtn = document.querySelector(`th:nth-child(${columnIndex + 1}) .freeze-btn`);
-    
-    // Get the column name from the header
-    const columnName = document.querySelector(`#results thead tr:not(.column-controls) th:nth-child(${columnIndex + 1}) button`).textContent;
-    
-    if (frozenColumns.includes(columnIndex)) {
-        // Unfreeze
-        frozenColumns = frozenColumns.filter(col => col !== columnIndex);
-        columnCells.forEach(cell => {
-            cell.classList.remove('frozen-column');
-            cell.style.left = '';
-        });
-        freezeBtn.classList.remove('active');
+        // Get the column names for frozen columns
+        const frozenColumnNames = frozenColumns.map(colIndex => columnMap[colIndex]);
         
-        // Remove highlight if this was the only frozen column
-        if (frozenColumns.length === 0) {
-            document.querySelectorAll('.highlighted-column').forEach(el => {
-                el.classList.remove('highlighted-column');
+        // Filter the data to include only frozen columns
+        const exportData = filteredData.map(item => {
+            const filteredItem = {};
+            frozenColumnNames.forEach(colName => {
+                filteredItem[colName] = item[colName];
             });
-        }
-    } else {
-        // Freeze
-        frozenColumns.push(columnIndex);
-        frozenColumns.sort((a, b) => a - b); // Keep in order
-        freezeBtn.classList.add('active');
-        
-        // Highlight the column
-        highlightColumn(columnName);
-    }
-    
-    updateFrozenColumns();
-    
-    // Force a reflow to ensure proper rendering
-    document.querySelector('.table-scroll-container').style.overflow = 'hidden';
-    document.querySelector('.table-scroll-container').offsetHeight;
-    document.querySelector('.table-scroll-container').style.overflow = 'auto';
-}
-
-function updateFrozenColumns() {
-    // First remove all frozen classes and reset positions
-    document.querySelectorAll('.frozen-column').forEach(el => {
-        el.classList.remove('frozen-column');
-        el.style.left = '';
-    });
-
-    // Calculate cumulative left positions
-    let leftPosition = 0;
-    
-    frozenColumns.forEach((colIndex, i) => {
-        const columnCells = document.querySelectorAll(`
-            #results thead th:nth-child(${colIndex + 1}),
-            #results tbody td:nth-child(${colIndex + 1})
-        `);
-        
-        const firstCell = columnCells[0];
-        const columnWidth = firstCell.offsetWidth;
-        
-        columnCells.forEach(cell => {
-            cell.classList.add('frozen-column');
-            cell.style.left = `${leftPosition}px`;
-            
-            // Set z-index based on cell type
-            if (cell.tagName === 'TH') {
-                if (cell.parentElement.classList.contains('column-controls')) {
-                    cell.style.zIndex = '1030';
-                } else {
-                    cell.style.zIndex = '1020';
-                }
-            } else {
-                cell.style.zIndex = '10';
-            }
+            return filteredItem;
         });
         
-        leftPosition += columnWidth;
-    });
-    
-    // Adjust the top position of the second header row
-    const controlsRow = document.querySelector('.column-controls');
-    const secondHeaderRow = document.querySelector('#results thead tr:not(.column-controls)');
-    
-    if (controlsRow && secondHeaderRow) {
-        const controlsHeight = controlsRow.offsetHeight;
-        secondHeaderRow.style.top = `${controlsHeight}px`;
-    }
-}
-
-// View detailed record
-function viewDetails(userId, year) {
-    // Convert year to number if it's coming as string
-    year = typeof year === 'string' ? parseInt(year) : year;
-    
-    // Find the record with case-insensitive comparison
-    const record = allData.find(item => {
-        // Handle potential undefined/null values
-        const itemUserId = item.Usuario ? item.Usuario.toString().toLowerCase() : '';
-        const itemYear = item['Año Declaración'] ? parseInt(item['Año Declaración']) : null;
+        // Create worksheet
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Columnas Congeladas");
         
-        return itemUserId === userId.toLowerCase() && itemYear === year;
-    });
-
-    if (!record) {
-        alert(`Registro no encontrado para:\nUsuario: ${userId}\nAño: ${year}`);
-        console.error('Record not found:', { userId, year, allData });
-        return;
+        // Export to file
+        XLSX.writeFile(workbook, 'columnas_congeladas.xlsx');
     }
 
-    // Create modal HTML with all available data
-    const modalHTML = `
-        <div id="detailModal" class="modal-overlay">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Detalles Completo - ${record.Nombre} (${year})</h2>
-                    <div>
-                        <button onclick="exportDetailsToExcel()" style="margin-right: 10px; padding: 5px 10px; background-color: #0b00a2; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            Exportar a Excel
-                        </button>
-                        <button onclick="closeModal()" class="close-button">×</button>
-                    </div>
-                </div>
-                
-                <div class="modal-body">
-                    ${renderDetailSection('Información Básica', [
-                        { label: 'Nombre', value: record.Nombre },
-                        { label: 'Usuario', value: record.Usuario },
-                        { label: 'Compañía', value: record['Compañía'] },
-                        { label: 'Cargo', value: record.Cargo },
-                        { label: 'Año Declaración', value: record['Año Declaración'] },
-                        { label: 'Año Creación', value: record['Año Creación'] }
-                    ])}
-                    
-                    ${renderFinancialSection('Resumen Financiero', record)}
-                    
-                    ${renderVariationSection('Variaciones Recientes', record)}
-                    
-                    <!-- Yearly Variations Sections -->
-                    ${renderYearlyVariationSection('Variaciones con 2021', record, '2021')}
-                    ${renderYearlyVariationSection('Variaciones con 2022', record, '2022')}
-                    ${renderYearlyVariationSection('Variaciones con 2023', record, '2023')}
-                    ${renderYearlyVariationSection('Variaciones con 2024', record, '2024')}
-                    
-                    <!-- Yearly Count Variations Sections -->
-                    ${renderYearlyCountVariationSection('Variaciones de Cantidad con 2021', record, '2021')}
-                    ${renderYearlyCountVariationSection('Variaciones de Cantidad con 2022', record, '2022')}
-                    ${renderYearlyCountVariationSection('Variaciones de Cantidad con 2023', record, '2023')}
-                    ${renderYearlyCountVariationSection('Variaciones de Cantidad con 2024', record, '2024')}
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-}
-
-// Helper function to render detail sections
-function renderDetailSection(title, fields) {
-    const filteredFields = fields.filter(field => field.value !== undefined && field.value !== null);
-    
-    if (filteredFields.length === 0) return '';
-    
-    return `
-        <div class="detail-section">
-            <h3>${title}</h3>
-            <div class="detail-grid">
-                ${filteredFields.map(field => `
-                    <div class="detail-item">
-                        <strong>${field.label}:</strong>
-                        <span>${field.value}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-}
-
-// Helper function to render financial section
-function renderFinancialSection(title, record) {
-    const financialFields = [
-        { label: 'Activos', value: formatNumber(record.Activos) },
-        { label: 'Pasivos', value: formatNumber(record.Pasivos) },
-        { label: 'Patrimonio', value: formatNumber(record.Patrimonio) },
-        { label: 'Apalancamiento', value: record.Apalancamiento ? `${record.Apalancamiento}%` : null },
-        { label: 'Endeudamiento', value: record.Endeudamiento ? `${record.Endeudamiento}%` : null },
-        { label: 'Saldo Bancario', value: formatNumber(record.BancoSaldo) },
-        { label: 'Bienes', value: formatNumber(record.Bienes) },
-        { label: 'Inversiones', value: formatNumber(record.Inversiones) },
-        { label: 'Ingresos', value: formatNumber(record.Ingresos) }
-    ].filter(field => field.value !== undefined && field.value !== null);
-    
-    return renderDetailSection(title, financialFields);
-}
-
-// Helper function to render variation sections
-function renderVariationSection(title, record) {
-    const variationFields = [
-        { label: 'Activos Var. Abs.', value: record['Activos Var. Abs.'] },
-        { label: 'Activos Var. Rel.', value: record['Activos Var. Rel.'] },
-        { label: 'Pasivos Var. Abs.', value: record['Pasivos Var. Abs.'] },
-        { label: 'Pasivos Var. Rel.', value: record['Pasivos Var. Rel.'] },
-        { label: 'Patrimonio Var. Abs.', value: record['Patrimonio Var. Abs.'] },
-        { label: 'Patrimonio Var. Rel.', value: record['Patrimonio Var. Rel.'] },
-        { label: 'Apalancamiento Var. Abs.', value: record['Apalancamiento Var. Abs.'] },
-        { label: 'Apalancamiento Var. Rel.', value: record['Apalancamiento Var. Rel.'] },
-        { label: 'Endeudamiento Var. Abs.', value: record['Endeudamiento Var. Abs.'] },
-        { label: 'Endeudamiento Var. Rel.', value: record['Endeudamiento Var. Rel.'] },
-        { label: 'BancoSaldo Var. Abs.', value: record['BancoSaldo Var. Abs.'] },
-        { label: 'BancoSaldo Var. Rel.', value: record['BancoSaldo Var. Rel.'] },
-        { label: 'Bienes Var. Abs.', value: record['Bienes Var. Abs.'] },
-        { label: 'Bienes Var. Rel.', value: record['Bienes Var. Rel.'] },
-        { label: 'Inversiones Var. Abs.', value: record['Inversiones Var. Abs.'] },
-        { label: 'Inversiones Var. Rel.', value: record['Inversiones Var. Rel.'] },
-        { label: 'Ingresos Var. Abs.', value: record['Ingresos Var. Abs.'] },
-        { label: 'Ingresos Var. Rel.', value: record['Ingresos Var. Rel.'] }
-    ].filter(field => field.value !== undefined && field.value !== null);
-    
-    if (variationFields.length === 0) return '';
-    
-    return `
-        <div class="detail-section">
-            <h3>${title}</h3>
-            <div class="variation-grid">
-                ${variationFields.map(field => `
-                    <div class="variation-item">
-                        <strong>${field.label}:</strong>
-                        <span>${field.value}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-}
-
-// Helper function to render yearly variation sections
-function renderYearlyVariationSection(title, record, year) {
-    const yearlyFields = [
-        { label: `Activos Var. Abs. ${year}`, value: record[`${year} Activos Var. Abs.`] },
-        { label: `Activos Var. Rel. ${year}`, value: record[`${year} Activos Var. Rel.`] },
-        { label: `Pasivos Var. Abs. ${year}`, value: record[`${year} Pasivos Var. Abs.`] },
-        { label: `Pasivos Var. Rel. ${year}`, value: record[`${year} Pasivos Var. Rel.`] },
-        { label: `Patrimonio Var. Abs. ${year}`, value: record[`${year} Patrimonio Var. Abs.`] },
-        { label: `Patrimonio Var. Rel. ${year}`, value: record[`${year} Patrimonio Var. Rel.`] },
-        { label: `BancoSaldo Var. Abs. ${year}`, value: record[`${year} BancoSaldo Var. Abs.`] },
-        { label: `BancoSaldo Var. Rel. ${year}`, value: record[`${year} BancoSaldo Var. Rel.`] },
-        { label: `Bienes Var. Abs. ${year}`, value: record[`${year} Bienes Var. Abs.`] },
-        { label: `Bienes Var. Rel. ${year}`, value: record[`${year} Bienes Var. Rel.`] },
-        { label: `Inversiones Var. Abs. ${year}`, value: record[`${year} Inversiones Var. Abs.`] },
-        { label: `Inversiones Var. Rel. ${year}`, value: record[`${year} Inversiones Var. Rel.`] },
-        { label: `Ingresos Var. Abs. ${year}`, value: record[`${year} Ingresos Var. Abs.`] },
-        { label: `Ingresos Var. Rel. ${year}`, value: record[`${year} Ingresos Var. Rel.`] }
-    ].filter(field => field.value !== undefined && field.value !== null);
-    
-    if (yearlyFields.length === 0) return '';
-    
-    return `
-        <div class="detail-section">
-            <h3>${title}</h3>
-            <div class="variation-grid">
-                ${yearlyFields.map(field => `
-                    <div class="variation-item">
-                        <strong>${field.label}:</strong>
-                        <span>${field.value}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-}
-
-// Helper function to render yearly count variations
-function renderYearlyCountVariationSection(title, record, year) {
-    const countVariationFields = [
-        { label: `Cant. Deudas Var. Abs. ${year}`, value: record[`${year} Cant_Deudas Var. Abs.`] },
-        { label: `Cant. Deudas Var. Rel. ${year}`, value: record[`${year} Cant_Deudas Var. Rel.`] },
-        { label: `Cant. Bancos Var. Abs. ${year}`, value: record[`${year} Cant_Bancos Var. Abs.`] },
-        { label: `Cant. Bancos Var. Rel. ${year}`, value: record[`${year} Cant_Bancos Var. Rel.`] },
-        { label: `Cant. Bienes Var. Abs. ${year}`, value: record[`${year} Cant_Bienes Var. Abs.`] },
-        { label: `Cant. Bienes Var. Rel. ${year}`, value: record[`${year} Cant_Bienes Var. Rel.`] },
-        { label: `Cant. Inversiones Var. Abs. ${year}`, value: record[`${year} Cant_Inversiones Var. Abs.`] },
-        { label: `Cant. Inversiones Var. Rel. ${year}`, value: record[`${year} Cant_Inversiones Var. Rel.`] },
-        { label: `Cant. Ingresos Var. Abs. ${year}`, value: record[`${year} Cant_Ingresos Var. Abs.`] },
-        { label: `Cant. Ingresos Var. Rel. ${year}`, value: record[`${year} Cant_Ingresos Var. Rel.`] }
-    ].filter(field => field.value !== undefined && field.value !== null);
-    
-    if (countVariationFields.length === 0) return '';
-    
-    return `
-        <div class="detail-section">
-            <h3>${title}</h3>
-            <div class="variation-grid">
-                ${countVariationFields.map(field => `
-                    <div class="variation-item">
-                        <strong>${field.label}:</strong>
-                        <span>${field.value}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-}
-
-// Format numbers with thousands separator
-function formatNumber(num) {
-    if (num === undefined || num === null) return 'N/A';
-    return new Intl.NumberFormat('es-CO').format(num);
-}
-
-function resizeColumn(columnIndex, width) {
-    const columnCells = document.querySelectorAll(`#results tr > *:nth-child(${columnIndex + 1})`);
-    columnCells.forEach(cell => {
-        cell.style.width = `${width}px`;
-        cell.style.minWidth = `${width}px`;
-        cell.style.maxWidth = `${width}px`;
-    });
-    
-    // Update frozen columns positions if this column is frozen
-    if (frozenColumns.includes(columnIndex)) {
-        updateFrozenColumns();
-    }
-}
-
-// Add this to your setup code
-const resizeObserver = new ResizeObserver(() => {
-    updateFrozenColumns();
-});
-
-// Observe the controls row
-const controlsRow = document.querySelector('.column-controls');
-if (controlsRow) {
-    resizeObserver.observe(controlsRow);
-}
-
-function quickFilter(columnName) {
-    // Then proceed with the existing sorting functionality
-    if (currentSortColumn === columnName) {
-        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-        currentSortColumn = columnName;
-        sortDirection = 'asc';
-    }
-    
-    document.querySelectorAll('#results th').forEach(th => {
-        th.classList.remove('sorted-asc', 'sorted-desc');
-    });
-    
-    const columnMap = {
-        'Usuario': 4,
-        'Nombre': 0,
-        'Compañía': 2,
-        'Cargo': 3,
-        'Año Declaración': 1,
-        'Activos': 5,
-        'Pasivos': 6,
-        'Patrimonio': 7,
-        'Apalancamiento': 8,
-        'Endeudamiento': 9,
-        'Cant_Deudas': 10,
-        'BancoSaldo': 11,
-        'Cant_Bancos': 12,
-        'Bienes': 13,
-        'Cant_Bienes': 14,
-        'Inversiones': 15,
-        'Cant_Inversiones': 16,
-        'Ingresos': 17,
-        'Cant_Ingresos': 18,
-        'Activos Var. Abs.': 19,
-        'Pasivos Var. Abs.': 20,
-        'Patrimonio Var. Abs.': 21,
-        'Apalancamiento Var. Abs.': 22,
-        'Endeudamiento Var. Abs.': 23,
-        'BancoSaldo Var. Abs.': 24,
-        'Bienes Var. Abs.': 25,
-        'Inversiones Var. Abs.': 26,
-        'Ingresos Var. Abs.': 27,
-        'Activos Var. Rel.': 28,
-        'Pasivos Var. Rel.': 29,
-        'Patrimonio Var. Rel.': 30,
-        'Apalancamiento Var. Rel.': 31,
-        'Endeudamiento Var. Rel.': 32,
-        'BancoSaldo Var. Rel.': 33,
-        'Bienes Var. Rel.': 34,
-        'Inversiones Var. Rel.': 35,
-        'Ingresos Var. Rel.': 36
+    // Public API
+    return {
+        exportToExcel,
+        exportFrozenColumnsToExcel
     };
-    
-    const columnIndex = columnMap[columnName];
-    if (columnIndex !== undefined) {
-        const header = document.querySelector(`#results th:nth-child(${columnIndex + 1})`);
-        if (header) {
-            header.classList.add(`sorted-${sortDirection}`);
-            
-            const icon = header.querySelector('.sort-icon');
-            if (icon) {
-                icon.textContent = sortDirection === 'asc' ? '↑' : '↓';
-            }
-        }
-    }
-    
-    highlightColumn(columnName);
-    currentFilterColumn = columnName;
-    lastSelectedColumn = columnName;
-    
-    sortTable(columnName, sortDirection);
-}
-
-function showColumnStats(columnName) {
-    // Collect all values for this column
-    const values = allData.map(item => item[columnName]);
-    
-    // Calculate basic statistics
-    const numericValues = values
-        .map(v => typeof v === 'string' ? parseFloat(v.replace(/[^\d.-]/g, '')) : parseFloat(v))
-        .filter(v => !isNaN(v));
-        
-    const isNumeric = numericValues.length > 0;
-    
-    let stats = {
-        count: values.length,
-        uniqueCount: new Set(values.filter(v => v !== undefined && v !== null)).size,
-        min: null,
-        max: null,
-        avg: null,
-        commonValues: [],
-        allUniqueValues: []
-    };
-    
-    if (isNumeric) {
-        stats.min = Math.min(...numericValues);
-        stats.max = Math.max(...numericValues);
-        stats.avg = numericValues.reduce((a, b) => a + b, 0) / numericValues.length;
-    }
-    
-    // Find most common values (top 5)
-    const valueCounts = {};
-    values.forEach(v => {
-        if (v !== undefined && v !== null) {
-            const val = typeof v === 'string' ? v.trim() : v;
-            valueCounts[val] = (valueCounts[val] || 0) + 1;
-        }
-    });
-    
-    stats.commonValues = Object.entries(valueCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([value, count]) => ({ value, count }));
-    
-    // Get all unique values (sorted)
-    stats.allUniqueValues = Object.keys(valueCounts)
-        .sort((a, b) => {
-            if (isNumeric) {
-                return parseFloat(a) - parseFloat(b);
-            }
-            return a.localeCompare(b);
-        });
-    
-    // Format numbers for display
-    const formatNumber = (num) => {
-        if (num === null || num === undefined) return 'N/A';
-        if (typeof num === 'string') return num;
-        if (Math.abs(num) >= 1000000) {
-            return '$' + (num / 1000000).toFixed(2) + 'M';
-        }
-        return new Intl.NumberFormat('es-CO').format(num);
-    };
-    
-    // Create modal HTML with tabs
-    const modalHTML = `
-        <div id="columnStatsModal" class="modal-overlay">
-            <div class="modal-content" style="max-width: 800px;">
-                <div class="modal-header">
-                    <h2>📊 Estadísticas de Columna: ${columnName}</h2>
-                    <button onclick="closeModal()" class="close-button">×</button>
-                </div>
-                
-                <div class="modal-tabs">
-                    <button class="tab-btn active" onclick="switchTab('stats', this)">Estadísticas</button>
-                    <button class="tab-btn" onclick="switchTab('values', this)">Todos los Valores (${stats.allUniqueValues.length})</button>
-                </div>
-                
-                <div class="modal-body">
-                    <div id="stats-tab" class="tab-content active">
-                        <div class="stats-grid">
-                            <div class="stat-item">
-                                <strong>Total de valores:</strong>
-                                <span>${stats.count}</span>
-                            </div>
-                            <div class="stat-item">
-                                <strong>Valores únicos:</strong>
-                                <span>${stats.uniqueCount}</span>
-                            </div>
-                            ${isNumeric ? `
-                            <div class="stat-item">
-                                <strong>Promedio:</strong>
-                                <span>${formatNumber(stats.avg)}</span>
-                            </div>
-                            <div class="stat-item">
-                                <strong>Mínimo:</strong>
-                                <span>${formatNumber(stats.min)}</span>
-                            </div>
-                            <div class="stat-item">
-                                <strong>Máximo:</strong>
-                                <span>${formatNumber(stats.max)}</span>
-                            </div>
-                            ` : ''}
-                        </div>
-                        
-                        <div class="common-values-section">
-                            <h3>Valores más comunes</h3>
-                            <div class="common-values-grid">
-                                ${stats.commonValues.map(item => `
-                                    <div class="common-value-item">
-                                        <span class="value">${formatNumber(item.value)}</span>
-                                        <span class="count">${item.count} (${Math.round((item.count / stats.count) * 100)}%)</span>
-                                        <button onclick="applyCommonValueFilter('${columnName}', '${item.value.replace(/'/g, "\\'")}')" 
-                                                class="apply-filter-btn">
-                                            Filtrar
-                                        </button>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                        
-                        <div class="quick-filter-actions">
-                            <button onclick="applyMinMaxFilter('${columnName}', 'min')" class="action-btn">
-                                Filtrar por mínimo
-                            </button>
-                            <button onclick="applyMinMaxFilter('${columnName}', 'max')" class="action-btn">
-                                Filtrar por máximo
-                            </button>
-                            <button onclick="applyAvgFilter('${columnName}')" class="action-btn" ${!isNumeric ? 'disabled' : ''}>
-                                Filtrar por promedio
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div id="values-tab" class="tab-content">
-                        <div class="values-search">
-                            <input type="text" id="values-search-input" placeholder="Buscar valores..." 
-                                   oninput="searchValues('${columnName}')">
-                            <div class="values-count">
-                                Mostrando <span id="values-showing">0</span> de ${stats.allUniqueValues.length} valores
-                            </div>
-                        </div>
-                        <div class="values-container" id="values-container">
-                            <!-- Values will be loaded here with pagination -->
-                        </div>
-                        <div class="values-pagination">
-                            <button id="values-prev" onclick="navigateValuesPage(-1)" disabled>Anterior</button>
-                            <span id="values-page-info">Página 1</span>
-                            <button id="values-next" onclick="navigateValuesPage(1)">Siguiente</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Add to DOM
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    
-    // Initialize values tab
-    currentValuesPage = 1;
-    currentValuesSearch = '';
-    currentValuesColumn = columnName;
-    renderValuesPage();
-}
-
-function applyCommonValueFilter(columnName, value) {
-    try {
-        // Determine if the value is numeric
-        const isNumeric = !isNaN(parseFloat(value)) && isFinite(value);
-        
-        // Set the operator based on value type
-        const operator = isNumeric ? '=' : 'contains';
-        
-        // Add filter for this value
-        document.getElementById('column').value = columnName;
-        document.getElementById('operator').value = operator;
-        document.getElementById('value1').value = value;
-        
-        addFilter();
-        closeModal();
-    } catch (error) {
-        console.error('Error applying common value filter:', error);
-        alert('Error al aplicar el filtro. Por favor intente nuevamente.');
-    }
-}
-
-function applyMinMaxFilter(columnName, type) {
-    const columnValues = allData.map(item => parseFloat(item[columnName])).filter(v => !isNaN(v));
-    if (columnValues.length === 0) return;
-    
-    const value = type === 'min' ? Math.min(...columnValues) : Math.max(...columnValues);
-    
-    document.getElementById('column').value = columnName;
-    document.getElementById('operator').value = '=';
-    document.getElementById('value1').value = value;
-    addFilter();
-    closeModal();
-}
-
-function applyAvgFilter(columnName) {
-    const columnValues = allData.map(item => parseFloat(item[columnName])).filter(v => !isNaN(v));
-    if (columnValues.length === 0) return;
-    
-    const avg = columnValues.reduce((a, b) => a + b, 0) / columnValues.length;
-    
-    document.getElementById('column').value = columnName;
-    document.getElementById('operator').value = '>=';
-    document.getElementById('value1').value = avg.toFixed(2);
-    addFilter();
-    closeModal();
-}
-
-function closeModal() {
-    const modal = document.getElementById('columnStatsModal') || document.getElementById('detailModal');
-    if (modal) modal.remove();
-}
-
-// Export details to Excel
-function exportDetailsToExcel() {
-    const modal = document.getElementById('detailModal');
-    if (!modal) return;
-    
-    // Get all the data from the modal
-    const data = [];
-    const sections = modal.querySelectorAll('.detail-section');
-    
-    sections.forEach(section => {
-        const sectionTitle = section.querySelector('h3').textContent;
-        const items = section.querySelectorAll('.detail-item, .variation-item');
-        
-        items.forEach(item => {
-            const label = item.querySelector('strong')?.textContent.replace(':', '') || '';
-            const value = item.querySelector('span')?.textContent || item.textContent.replace(label, '').replace(':', '').trim();
-            
-            if (label && value) {
-                data.push({
-                    'Sección': sectionTitle,
-                    'Campo': label,
-                    'Valor': value
-                });
-            }
-        });
-    });
-    
-    if (data.length === 0) {
-        alert('No hay datos para exportar');
-        return;
-    }
-    
-    // Create worksheet
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Detalles");
-    
-    // Get the user name from the modal title
-    const modalTitle = modal.querySelector('.modal-header h2').textContent;
-    const fileName = modalTitle.replace('Detalles Completo - ', '').replace(/[\/\\?%*:|"<>]/g, '-') + '.xlsx';
-    
-    // Export to file
-    XLSX.writeFile(workbook, fileName);
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    // --- First Listener's Code ---
-    const tabs = document.querySelectorAll('.tab');
-    const tabContents = document.querySelectorAll('.tab-content');
-
-    tabs.forEach(tab => {
-        tab.addEventListener('click', function() {
-            // Deactivate all tabs and content
-            tabs.forEach(t => t.classList.remove('active'));
-            tabContents.forEach(c => c.style.display = 'none');
-
-            // Activate the clicked tab and its content
-            this.classList.add('active');
-            const tabId = this.dataset.tab;
-            document.getElementById(tabId).style.display = 'block';
-        });
-    });
-
-
-    // --- Second Listener's Code ---
-    // Set initial header positions
-    const controlsRow = document.querySelector('.column-controls');
-    const secondHeaderRow = document.querySelector('#results thead tr:not(.column-controls)');
-
-    if (controlsRow && secondHeaderRow) {
-        const controlsHeight = controlsRow.offsetHeight;
-        secondHeaderRow.style.top = `${controlsHeight}px`;
-    }
-
-    // Add resize observer
-    const resizeObserver = new ResizeObserver(() => {
-        updateFrozenColumns(); // Assuming this function is defined elsewhere
-    });
-
-    if (controlsRow) {
-        resizeObserver.observe(controlsRow);
-    }
-});
-
-// Export to Excel
-function exportToExcel() {
-    if (filteredData.length === 0) {
-        alert('No hay datos para exportar');
-        return;
-    }
-    
-    // Use the original data with trend icons
-    const exportData = filteredData.map(item => ({...item}));
-    
-    // Create worksheet
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Datos Filtrados");
-    
-    // Export to file
-    XLSX.writeFile(workbook, 'datos_filtrados.xlsx');
-}
-
-function exportFrozenColumnsToExcel() {
-    if (filteredData.length === 0) {
-        alert('No hay datos para exportar');
-        return;
-    }
-    
-    if (frozenColumns.length === 0) {
-        alert('No hay columnas congeladas para exportar');
-        return;
-    }
-    
-    // Create a mapping of column indices to column names
-    const columnMap = {
-        0: 'Nombre',
-        1: 'Año Declaración',
-        2: 'Compañía',
-        3: 'Cargo',
-        4: 'Usuario',
-        5: 'Activos',
-        6: 'Pasivos',
-        7: 'Patrimonio',
-        8: 'Apalancamiento',
-        9: 'Endeudamiento',
-        10: 'Cant_Deudas',
-        11: 'BancoSaldo',
-        12: 'Cant_Bancos',
-        13: 'Bienes',
-        14: 'Cant_Bienes',
-        15: 'Inversiones',
-        16: 'Cant_Inversiones',
-        17: 'Ingresos',
-        18: 'Cant_Ingresos',
-        19: 'Activos Var. Abs.',
-        20: 'Pasivos Var. Abs.',
-        21: 'Patrimonio Var. Abs.',
-        22: 'Apalancamiento Var. Abs.',
-        23: 'Endeudamiento Var. Abs.',
-        24: 'BancoSaldo Var. Abs.',
-        25: 'Bienes Var. Abs.',
-        26: 'Inversiones Var. Abs.',
-        27: 'Ingresos Var. Abs.',
-        28: 'Activos Var. Rel.',
-        29: 'Pasivos Var. Rel.',
-        30: 'Patrimonio Var. Rel.',
-        31: 'Apalancamiento Var. Rel.',
-        32: 'Endeudamiento Var. Rel.',
-        33: 'BancoSaldo Var. Rel.',
-        34: 'Bienes Var. Rel.',
-        35: 'Inversiones Var. Rel.',
-        36: 'Ingresos Var. Rel.'
-    };
-    
-    // Get the column names for frozen columns
-    const frozenColumnNames = frozenColumns.map(colIndex => columnMap[colIndex]);
-    
-    // Filter the data to include only frozen columns
-    const exportData = filteredData.map(item => {
-        const filteredItem = {};
-        frozenColumnNames.forEach(colName => {
-            filteredItem[colName] = item[colName];
-        });
-        return filteredItem;
-    });
-    
-    // Create worksheet
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Columnas Congeladas");
-    
-    // Export to file
-    XLSX.writeFile(workbook, 'columnas_congeladas.xlsx');
-}
+})();
 '@
+
+# 8. main.js - Main entry point that imports all modules
+Set-Content -Path "static/js/main.js" -Value @'
+// Main application entry point
+
+// Import all modules
+import './modules/core.js';
+import './modules/tableRenderer.js';
+import './modules/filterManager.js';
+import './modules/detailsModal.js';
+import './modules/statsModal.js';
+import './modules/excelUpload.js';
+import './modules/exportManager.js';
+
+// Make modules available globally (for inline event handlers)
+window.App = App;
+window.TableRenderer = TableRenderer;
+window.FilterManager = FilterManager;
+window.DetailsModal = DetailsModal;
+window.StatsModal = StatsModal;
+window.ExcelUpload = ExcelUpload;
+window.ExportManager = ExportManager;
+'@
+
+Write-Host "✅ Modular JavaScript files created successfully!" -ForegroundColor $GREEN
+
 }
 
 function createStructure {
@@ -4964,9 +5134,9 @@ function main {
     Write-Host "🏗️ The framework is set" -ForegroundColor $YELLOW
     Write-Host "🏗️ Opening index.html in browser..." -ForegroundColor $GREEN
     
-    migratoDjango
+    #migratoDjango
     #cd ..
-    #python app.py
+    python app.py
 
 }
 
