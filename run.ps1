@@ -1549,6 +1549,7 @@ def merge_trends_data(personas_file, trends_file, output_file):
     """
     Merge trends data with personas data:
     - Keeps all records from trends.xlsx
+    - Replaces "Compañia" with "Compania" and "Cargo" with "CARGO" from Personas
     - Adds only 'Cedula' from Personas.xlsx at the beginning
     - Matches on 'Id' (Personas) with 'Usuario' (trends)
     """
@@ -1560,10 +1561,14 @@ def merge_trends_data(personas_file, trends_file, output_file):
         df_personas = pd.read_excel(personas_file, engine='openpyxl')
         df_trends = pd.read_excel(trends_file, engine='openpyxl')
         
+        # Select only the columns we need from personas
+        persona_columns = ['Id', 'Cedula', 'Compania', 'CARGO']
+        df_personas_subset = df_personas[persona_columns]
+        
         # Perform left join (keep all trends records)
         merged_df = pd.merge(
             left=df_trends,
-            right=df_personas[['Id', 'Cedula']],
+            right=df_personas_subset,
             how='left',
             left_on='Usuario',
             right_on='Id'
@@ -1571,6 +1576,15 @@ def merge_trends_data(personas_file, trends_file, output_file):
         
         # Drop the Id column from the merge (we only needed it for matching)
         merged_df = merged_df.drop(columns=['Id'])
+        
+        # Replace Compañia and Cargo columns if they exist in trends
+        if 'Compañia' in merged_df.columns:
+            merged_df['Compañia'] = merged_df['Compania']
+            merged_df = merged_df.drop(columns=['Compania'])
+            
+        if 'Cargo' in merged_df.columns:
+            merged_df['Cargo'] = merged_df['CARGO']
+            merged_df = merged_df.drop(columns=['CARGO'])
         
         # Reorder columns to put Cedula first
         cols = ['Cedula'] + [col for col in merged_df.columns if col != 'Cedula']
