@@ -1133,11 +1133,11 @@ def main():
         df_combined = pd.merge(df_combined, df_income_processed, on=['Usuario', 'Año Declaración'], how='left')
         
         # Save basic trends
-        save_results(df_combined, "tables/trends/trends.xlsx")
+        save_results(df_combined, "src/trends.xlsx")
         
         # Calculate and save yearly variations
         df_yearly = calculate_yearly_variations(df_combined)
-        save_results(df_yearly, "tables/trends/overTrends.xlsx", "src/data.json")
+        save_results(df_yearly, "src/overTrends.xlsx", "src/data.json")
         
     except FileNotFoundError as e:
         print(f"Error: Required file not found - {e}")
@@ -1545,55 +1545,47 @@ function createIDtrends {
 import pandas as pd
 from pathlib import Path
 
-def merge_trends_data(ids_file, trends_file, output_file):
+def merge_trends_data(personas_file, trends_file, output_file):
     """
-    Merge trends data with employee IDs using first-letter matching:
+    Merge trends data with personas data:
     - Keeps all records from trends.xlsx
-    - Adds # Documento from IDS.xlsx
-    - Matches on first letters of Nombre, Cargo, and Compañía
+    - Adds only 'Cedula' from Personas.xlsx at the beginning
+    - Matches on 'Id' (Personas) with 'Usuario' (trends)
     """
     try:
         # Create output directory if needed
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         
         # Read both files
-        df_ids = pd.read_excel(ids_file, engine='openpyxl')
+        df_personas = pd.read_excel(personas_file, engine='openpyxl')
         df_trends = pd.read_excel(trends_file, engine='openpyxl')
-        
-        # Create first-letter merge keys
-        for df in [df_ids, df_trends]:
-            df['merge_key'] = (
-                df['Nombre'].str[0].str.lower() + '|' +
-                df['Cargo'].str[0].str.lower() + '|' +
-                df['Compañía'].str[0].str.lower()
-            )
         
         # Perform left join (keep all trends records)
         merged_df = pd.merge(
             left=df_trends,
-            right=df_ids[['merge_key', '# Documento']],
+            right=df_personas[['Id', 'Cedula']],
             how='left',
-            on='merge_key'
+            left_on='Usuario',
+            right_on='Id'
         )
         
-        # Handle potential duplicates - keep first match
-        merged_df = merged_df.drop_duplicates(subset=df_trends.columns.tolist(), keep='first')
+        # Drop the Id column from the merge (we only needed it for matching)
+        merged_df = merged_df.drop(columns=['Id'])
         
-        # Clean up - drop the merge key and reorder columns
-        merged_df = merged_df.drop(columns=['merge_key'])
-        cols = ['# Documento'] + [col for col in merged_df.columns if col != '# Documento']
+        # Reorder columns to put Cedula first
+        cols = ['Cedula'] + [col for col in merged_df.columns if col != 'Cedula']
         merged_df = merged_df[cols]
         
         # Save to Excel
         with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
             merged_df.to_excel(writer, index=False)
             
-        print(f"Successfully merged files using first-letter matching:\n"
-              f"IDS file: {ids_file}\n"
+        print(f"Successfully merged files:\n"
+              f"Personas file: {personas_file}\n"
               f"Trends file: {trends_file}\n"
               f"Output: {output_file}\n"
               f"Total records: {len(merged_df)}\n"
-              f"Records with matched ID: {merged_df['# Documento'].notna().sum()}")
+              f"Records with matched Cedula: {merged_df['Cedula'].notna().sum()}")
         
     except Exception as e:
         print(f"Error merging files: {str(e)}")
@@ -1602,14 +1594,14 @@ def merge_trends_data(ids_file, trends_file, output_file):
 if __name__ == "__main__":
     # Configuration
     CONFIG = {
-        'ids_file': "tables/IDS.xlsx",  # Current combined file
-        'trends_file': "tables/trends/trends.xlsx",       # New trends data
-        'output_file': "tables/idTrends.xlsx"  # Output file
+        'personas_file': "src/Personas.xlsx",      # Personas data file
+        'trends_file': "src/trends.xlsx",  # Trends data file
+        'output_file': "src/idTrends.xlsx"      # Output file
     }
     
     # Run merging
     merge_trends_data(
-        ids_file=CONFIG['ids_file'],
+        personas_file=CONFIG['personas_file'],
         trends_file=CONFIG['trends_file'],
         output_file=CONFIG['output_file']
     )
@@ -1617,79 +1609,79 @@ if __name__ == "__main__":
 }
 
 function createINtrends {
-    Write-Host "🏗️ Merging Trends/Conflicts" -ForegroundColor $YELLOW
+    Write-Host "🏗️ Merging Trends with Conflicts" -ForegroundColor $YELLOW
     
     Set-Content -Path "models/inTrends.py" -Value @"
 import pandas as pd
 from pathlib import Path
 
-def join_conflicts_data(trends_file, conflicts_file, output_file, how='left'):
+def merge_conflicts_data(idtrends_file, conflicts_file, output_file):
     """
-    Join trends data with conflicts data using different join types:
-    - Uses # Documento as the join key
-    - Keeps all columns from both files
-    - Handles duplicate column names
-    - Converts join key to consistent type (string)
-    - Supports join types: 'left', 'right', 'inner', 'outer'
-    - Saves as inTrends.xlsx
+    Merge idTrends data with conflicts data:
+    - Keeps all records from idTrends.xlsx
+    - Adds only specified columns from conflicts.xlsx
+    - Matches on 'Cedula' (idTrends) with '# Documento' (conflicts)
     """
     try:
         # Create output directory if needed
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         
         # Read both files
-        df_trends = pd.read_excel(trends_file, engine='openpyxl')
+        df_idtrends = pd.read_excel(idtrends_file, engine='openpyxl')
         df_conflicts = pd.read_excel(conflicts_file, engine='openpyxl')
         
-        # Check if # Documento exists in both files
-        if '# Documento' not in df_trends.columns or '# Documento' not in df_conflicts.columns:
-            raise ValueError("# Documento column missing in one or both input files")
-        
-        # Convert '# Documento' columns to same type (string)
-        df_trends['# Documento'] = df_trends['# Documento'].astype(str)
+        # Convert both key columns to string type to ensure consistent merging
+        df_idtrends['Cedula'] = df_idtrends['Cedula'].astype(str)
         df_conflicts['# Documento'] = df_conflicts['# Documento'].astype(str)
         
-        # Perform the join operation
-        joined_df = pd.merge(
-            left=df_trends,
-            right=df_conflicts,
-            how=how,  # Type of join: 'left', 'right', 'inner', 'outer'
-            on='# Documento',
-            suffixes=('_trends', '_conflicts')
+        # Columns to keep from conflicts file
+        conflicts_columns_to_keep = [
+            '# Documento', 
+            'Fecha de Inicio', 
+            'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 
+            'Q6', 'Q7', 'Q8', 'Q9', 'Q10'
+        ]
+        
+        # Perform left join (keep all idTrends records)
+        merged_df = pd.merge(
+            left=df_idtrends,
+            right=df_conflicts[conflicts_columns_to_keep],
+            how='left',
+            left_on='Cedula',
+            right_on='# Documento'
         )
+        
+        # Drop the '# Documento' column from conflicts (we only needed it for matching)
+        merged_df = merged_df.drop(columns=['# Documento'])
         
         # Save to Excel
         with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            joined_df.to_excel(writer, index=False)
+            merged_df.to_excel(writer, index=False)
             
-        print(f"Successfully joined files with '{how}' join:\n"
-              f"Trends file: {trends_file}\n"
+        print(f"Successfully merged files:\n"
+              f"idTrends file: {idtrends_file}\n"
               f"Conflicts file: {conflicts_file}\n"
               f"Output: {output_file}\n"
-              f"Total records: {len(joined_df)}\n"
-              f"Records from trends: {len(df_trends)}\n"
-              f"Records from conflicts: {len(df_conflicts)}\n"
-              f"Join type: {how}")
+              f"Total records: {len(merged_df)}\n"
+              f"Records with matched conflicts data: {merged_df['Fecha de Inicio'].notna().sum()}")
         
     except Exception as e:
-        print(f"Error joining files: {str(e)}")
+        print(f"Error merging files: {str(e)}")
         raise
 
 if __name__ == "__main__":
     # Configuration
     CONFIG = {
-        'trends_file': "tables/idTrends.xlsx",  # Current trends file
-        'conflicts_file': "tables/conflicts.xlsx",      # Conflicts data
-        'output_file': "tables/inTrends.xlsx",        # Output file
-        'join_type': "left"  # Can be 'left', 'right', 'inner', 'outer'
+        'idtrends_file': "src/idTrends.xlsx",  # idTrends data file
+        'conflicts_file': "src/conflicts.xlsx",  # Conflicts data file
+        'output_file': "src/inTrends.xlsx"  # Output file
     }
     
-    # Run joining
-    join_conflicts_data(
-        trends_file=CONFIG['trends_file'],
+    # Run merging
+    merge_conflicts_data(
+        idtrends_file=CONFIG['idtrends_file'],
         conflicts_file=CONFIG['conflicts_file'],
-        output_file=CONFIG['output_file'],
-        how=CONFIG['join_type']
+        output_file=CONFIG['output_file']
     )
 "@
 }
@@ -4618,7 +4610,8 @@ function createStructure {
         "tables/cats",
         "tables/nets",
         "tables/trends",
-        "static/css/components"
+        "static/css/components",
+        "static/js/modules"
 
     )
     foreach ($dir in $directories) {
