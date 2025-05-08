@@ -17,7 +17,6 @@ django/
 toICO.py
 favicon.ico
 arpy.spec
-build.ps1
 build/
 favicon.png
 script.js
