@@ -15,12 +15,10 @@ function migratoDjango {
     django-admin startproject arpa
     cd arpa
 
-    # Create apps
+    # Create persons app
     python manage.py startapp persons
-    python manage.py startapp bienes
-    python manage.py startapp transacciones
 
-    # Create models.py for persons app
+    # Create models.py with all required fields including ID
     @"
 from django.db import models
 
@@ -46,202 +44,47 @@ class Person(models.Model):
         verbose_name_plural = "Personas"
 "@ | Out-File -FilePath "persons/models.py" -Encoding utf8
 
-    # Create models.py for bienes app
-# Create models.py for bienes app with proper encoding
-@"
-from django.db import models
-from persons.models import Person
-
-class BienesyRentas(models.Model):
-    idBien = models.AutoField(primary_key=True, verbose_name="ID Bien")
-    Cedula = models.CharField(max_length=20)
-    Usuario = models.CharField(max_length=255)
-    Nombre = models.CharField(max_length=255)
-    Compania = models.CharField(max_length=255, verbose_name="Compañía")
-    Cargo = models.CharField(max_length=255)
-    fkIdPeriodo = models.ForeignKey('Periodo', on_delete=models.CASCADE, verbose_name="Periodo")
-    Ano_Declaracion = models.IntegerField(verbose_name="Año Declaración")
-    Ano_Creacion = models.IntegerField(verbose_name="Año Creación")
-    Activos = models.DecimalField(max_digits=20, decimal_places=2)
-    Cant_Bienes = models.IntegerField(verbose_name="Cantidad Bienes")
-    Cant_Bancos = models.IntegerField(verbose_name="Cantidad Bancos")
-    Cant_Cuentas = models.IntegerField(verbose_name="Cantidad Cuentas")
-    Cant_Inversiones = models.IntegerField(verbose_name="Cantidad Inversiones")
-    Pasivos = models.DecimalField(max_digits=20, decimal_places=2)
-    Cant_Deudas = models.IntegerField(verbose_name="Cantidad Deudas")
-    Patrimonio = models.DecimalField(max_digits=20, decimal_places=2)
-    Apalancamiento = models.DecimalField(max_digits=20, decimal_places=2)
-    Endeudamiento = models.DecimalField(max_digits=20, decimal_places=2)
-    Activos_Var_Abs = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Activos Variación Absoluta")
-    Activos_Var_Rel = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Activos Variación Relativa")
-    Pasivos_Var_Abs = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Pasivos Variación Absoluta")
-    Pasivos_Var_Rel = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Pasivos Variación Relativa")
-    Patrimonio_Var_Abs = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Patrimonio Variación Absoluta")
-    Patrimonio_Var_Rel = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Patrimonio Variación Relativa")
-    Apalancamiento_Var_Abs = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Apalancamiento Variación Absoluta")
-    Apalancamiento_Var_Rel = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Apalancamiento Variación Relativa")
-    Endeudamiento_Var_Abs = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Endeudamiento Variación Absoluta")
-    Endeudamiento_Var_Rel = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Endeudamiento Variación Relativa")
-    BancoSaldo = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Saldo Bancario")
-    Bienes = models.DecimalField(max_digits=20, decimal_places=2)
-    Inversiones = models.DecimalField(max_digits=20, decimal_places=2)
-    BancoSaldo_Var_Abs = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Saldo Bancario Var. Abs.")
-    BancoSaldo_Var_Rel = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Saldo Bancario Var. Rel.")
-    Bienes_Var_Abs = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Bienes Variación Absoluta")
-    Bienes_Var_Rel = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Bienes Variación Relativa")
-    Inversiones_Var_Abs = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Inversiones Variación Absoluta")
-    Inversiones_Var_Rel = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Inversiones Variación Relativa")
-    Ingresos = models.DecimalField(max_digits=20, decimal_places=2)
-    Cant_Ingresos = models.IntegerField(verbose_name="Cantidad Ingresos")
-    Ingresos_Var_Abs = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Ingresos Variación Absoluta")
-    Ingresos_Var_Rel = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="Ingresos Variación Relativa")
-
-    def __str__(self):
-        return f"{self.idBien} - {self.Nombre}"
-
-    class Meta:
-        verbose_name = "Bienes y Rentas"
-        verbose_name_plural = "Bienes y Rentas"
-"@ | Out-File -FilePath "bienes/models.py" -Encoding utf8 -Force
-
-# Create the Periodo model that fkIdPeriodo references
-@"
-from django.db import models
-
-class Periodo(models.Model):
-    nombre = models.CharField(max_length=100)
-    fecha_inicio = models.DateField()
-    fecha_fin = models.DateField()
-
-    def __str__(self):
-        return self.nombre
-"@ | Out-File -FilePath "bienes/models.py" -Encoding utf8 -Append
-
-    # Create models.py for transacciones app
+    # Create views.py with import functionality
     @"
-from django.db import models
-from persons.models import Person
-
-class TransaccionesTarjetas(models.Model):
-    Archivo = models.CharField(max_length=255)
-    Tarjetahabiente = models.CharField(max_length=255)
-    Número_de_Tarjeta = models.CharField(max_length=20)
-    Moneda = models.CharField(max_length=10)
-    Tipo_de_Cambio = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    Número_de_Autorización = models.CharField(max_length=50)
-    Fecha_de_Transacción = models.DateField()
-    Descripción = models.TextField()
-    Valor_Original = models.DecimalField(max_digits=15, decimal_places=2)
-    Tasa_Pactada = models.DecimalField(max_digits=15, decimal_places=2)
-    Tasa_EA_Facturada = models.DecimalField(max_digits=15, decimal_places=2)
-    Cargos_y_Abonos = models.DecimalField(max_digits=15, decimal_places=2)
-    Saldo_a_Diferir = models.DecimalField(max_digits=15, decimal_places=2)
-    Cuotas = models.CharField(max_length=20)
-    Página = models.IntegerField()
-    persona = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='transacciones_mastercard')
-
-    def __str__(self):
-        return f"Transacción MC - {self.Tarjetahabiente} - {self.Fecha_de_Transacción}"
-
-    class Meta:
-        verbose_name = "Transacción Tarjeta MC"
-        verbose_name_plural = "Transacciones Tarjetas MC"
-
-class TransaccionesVisa(models.Model):
-    Archivo = models.CharField(max_length=255)
-    Tarjetahabiente = models.CharField(max_length=255)
-    Número_de_Tarjeta = models.CharField(max_length=20)
-    Número_de_Autorización = models.CharField(max_length=50)
-    Fecha_de_Transacción = models.DateField()
-    Descripción = models.TextField()
-    Valor_Original = models.DecimalField(max_digits=15, decimal_places=2)
-    Tasa_Pactada = models.DecimalField(max_digits=15, decimal_places=2)
-    Tasa_EA_Facturada = models.DecimalField(max_digits=15, decimal_places=2)
-    Cargos_y_Abonos = models.DecimalField(max_digits=15, decimal_places=2)
-    Saldo_a_Diferir = models.DecimalField(max_digits=15, decimal_places=2)
-    Cuotas = models.CharField(max_length=20)
-    Página = models.IntegerField()
-    persona = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='transacciones_visa')
-
-    def __str__(self):
-        return f"Transacción Visa - {self.Tarjetahabiente} - {self.Fecha_de_Transacción}"
-
-    class Meta:
-        verbose_name = "Transacción Tarjeta Visa"
-        verbose_name_plural = "Transacciones Tarjetas Visa"
-"@ | Out-File -FilePath "transacciones/models.py" -Encoding utf8
-
-    # Create views.py for bienes app
-    @"
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from .models import BienesyRentas
+from django.http import HttpResponse, HttpResponseRedirect
+from django.template import loader
+from django.shortcuts import render
+from .models import Person
 import pandas as pd
-from persons.models import Person
+from django.contrib import messages
 
-def list_bienes(request):
-    bienes = BienesyRentas.objects.all()
-    return render(request, 'bienes/list.html', {'bienes': bienes})
+def persons(request):
+    mypersons = Person.objects.all()
+    template = loader.get_template('all_persons.html')
+    context = {'mypersons': mypersons}
+    return HttpResponse(template.render(context, request))
+  
+def details(request, id):
+    myperson = Person.objects.get(id=id)
+    template = loader.get_template('details.html')
+    context = {'myperson': myperson}
+    return HttpResponse(template.render(context, request))
+  
+def main(request):
+    template = loader.get_template('main.html')
+    return HttpResponse(template.render())
 
-def import_bienes(request):
+def import_from_excel(request):
     if request.method == 'POST' and request.FILES.get('excel_file'):
         excel_file = request.FILES['excel_file']
         try:
             df = pd.read_excel(excel_file)
             
             for _, row in df.iterrows():
-                # Find or create related Person
-                person, _ = Person.objects.get_or_create(cedula=row['Cedula'], defaults={
-                    'nombre_completo': row['Nombre'],
-                    'cargo': row['Cargo'],
-                    'compania': row['Compania']
-                })
-                
-                BienesyRentas.objects.update_or_create(
-                    Cedula=row['Cedula'],
-                    fkIdPeriodo=row['fkIdPeriodo'],
+                Person.objects.update_or_create(
+                    id=row['Id'],
                     defaults={
-                        'Usuario': row.get('Usuario', ''),
-                        'Nombre': row['Nombre'],
-                        'Compañía': row['Compañía'],
-                        'Cargo': row['Cargo'],
-                        'Año_Declaración': row['Año Declaración'],
-                        'Año_Creación': row['Año Creación'],
-                        'Activos': row['Activos'],
-                        'Cant_Bienes': row['Cant_Bienes'],
-                        'Cant_Bancos': row['Cant_Bancos'],
-                        'Cant_Cuentas': row['Cant_Cuentas'],
-                        'Cant_Inversiones': row['Cant_Inversiones'],
-                        'Pasivos': row['Pasivos'],
-                        'Cant_Deudas': row['Cant_Deudas'],
-                        'Patrimonio': row['Patrimonio'],
-                        'Apalancamiento': row['Apalancamiento'],
-                        'Endeudamiento': row['Endeudamiento'],
-                        'Activos_Var_Abs': row['Activos Var. Abs.'],
-                        'Activos_Var_Rel': row['Activos Var. Rel.'],
-                        'Pasivos_Var_Abs': row['Pasivos Var. Abs.'],
-                        'Pasivos_Var_Rel': row['Pasivos Var. Rel.'],
-                        'Patrimonio_Var_Abs': row['Patrimonio Var. Abs.'],
-                        'Patrimonio_Var_Rel': row['Patrimonio Var. Rel.'],
-                        'Apalancamiento_Var_Abs': row['Apalancamiento Var. Abs.'],
-                        'Apalancamiento_Var_Rel': row['Apalancamiento Var. Rel.'],
-                        'Endeudamiento_Var_Abs': row['Endeudamiento Var. Abs.'],
-                        'Endeudamiento_Var_Rel': row['Endeudamiento Var. Rel.'],
-                        'BancoSaldo': row['BancoSaldo'],
-                        'Bienes': row['Bienes'],
-                        'Inversiones': row['Inversiones'],
-                        'BancoSaldo_Var_Abs': row['BancoSaldo Var. Abs.'],
-                        'BancoSaldo_Var_Rel': row['BancoSaldo Var. Rel.'],
-                        'Bienes_Var_Abs': row['Bienes Var. Abs.'],
-                        'Bienes_Var_Rel': row['Bienes Var. Rel.'],
-                        'Inversiones_Var_Abs': row['Inversiones Var. Abs.'],
-                        'Inversiones_Var_Rel': row['Inversiones Var. Rel.'],
-                        'Ingresos': row['Ingresos'],
-                        'Cant_Ingresos': row['Cant_Ingresos'],
-                        'Ingresos_Var_Abs': row['Ingresos Var. Abs.'],
-                        'Ingresos_Var_Rel': row['Ingresos Var. Rel.'],
-                        'Compania': row['Compania'],
-                        'persona': person
+                        'nombre_completo': row['NOMBRE COMPLETO'],
+                        'cargo': row['CARGO'],
+                        'cedula': row['Cedula'],
+                        'correo': row['Correo'],
+                        'compania': row['Compania'],
+                        'estado': row['Estado']
                     }
                 )
             
@@ -249,379 +92,153 @@ def import_bienes(request):
         except Exception as e:
             messages.error(request, f'Error importing data: {str(e)}')
         
-        return redirect('list_bienes')
+        return HttpResponseRedirect('/persons/')
     
-    return render(request, 'bienes/import.html')
-"@ | Out-File -FilePath "bienes/views.py" -Encoding utf8
+    return render(request, 'import_excel.html')
+"@ | Out-File -FilePath "persons/views.py" -Encoding utf8
 
-    # Create views.py for transacciones app
-    @"
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from .models import TransaccionesTarjetas, TransaccionesVisa
-import pandas as pd
-from persons.models import Person
-
-def list_transacciones(request):
-    transacciones_mc = TransaccionesTarjetas.objects.all()
-    transacciones_visa = TransaccionesVisa.objects.all()
-    return render(request, 'transacciones/list.html', {
-        'transacciones_mc': transacciones_mc,
-        'transacciones_visa': transacciones_visa
-    })
-
-def import_mastercard(request):
-    if request.method == 'POST' and request.FILES.get('excel_file'):
-        excel_file = request.FILES['excel_file']
-        try:
-            df = pd.read_excel(excel_file)
-            
-            for _, row in df.iterrows():
-                # Find or create related Person
-                person, _ = Person.objects.get_or_create(
-                    nombre_completo=row['Tarjetahabiente'],
-                    defaults={'cedula': ''}
-                )
-                
-                TransaccionesTarjetas.objects.create(
-                    Archivo=row['Archivo'],
-                    Tarjetahabiente=row['Tarjetahabiente'],
-                    Número_de_Tarjeta=row['Número de Tarjeta'],
-                    Moneda=row['Moneda'],
-                    Tipo_de_Cambio=row['Tipo de Cambio'],
-                    Número_de_Autorización=row['Número de Autorización'],
-                    Fecha_de_Transacción=row['Fecha de Transacción'],
-                    Descripción=row['Descripción'],
-                    Valor_Original=row['Valor Original'],
-                    Tasa_Pactada=row['Tasa Pactada'],
-                    Tasa_EA_Facturada=row['Tasa EA Facturada'],
-                    Cargos_y_Abonos=row['Cargos y Abonos'],
-                    Saldo_a_Diferir=row['Saldo a Diferir'],
-                    Cuotas=row['Cuotas'],
-                    Página=row['Página'],
-                    persona=person
-                )
-            
-            messages.success(request, f'Successfully imported {len(df)} Mastercard transactions!')
-        except Exception as e:
-            messages.error(request, f'Error importing Mastercard data: {str(e)}')
-        
-        return redirect('list_transacciones')
-    
-    return render(request, 'transacciones/import_mastercard.html')
-
-def import_visa(request):
-    if request.method == 'POST' and request.FILES.get('excel_file'):
-        excel_file = request.FILES['excel_file']
-        try:
-            df = pd.read_excel(excel_file)
-            
-            for _, row in df.iterrows():
-                # Find or create related Person
-                person, _ = Person.objects.get_or_create(
-                    nombre_completo=row['Tarjetahabiente'],
-                    defaults={'cedula': ''}
-                )
-                
-                TransaccionesVisa.objects.create(
-                    Archivo=row['Archivo'],
-                    Tarjetahabiente=row['Tarjetahabiente'],
-                    Número_de_Tarjeta=row['Número de Tarjeta'],
-                    Número_de_Autorización=row['Número de Autorización'],
-                    Fecha_de_Transacción=row['Fecha de Transacción'],
-                    Descripción=row['Descripción'],
-                    Valor_Original=row['Valor Original'],
-                    Tasa_Pactada=row['Tasa Pactada'],
-                    Tasa_EA_Facturada=row['Tasa EA Facturada'],
-                    Cargos_y_Abonos=row['Cargos y Abonos'],
-                    Saldo_a_Diferir=row['Saldo a Diferir'],
-                    Cuotas=row['Cuotas'],
-                    Página=row['Página'],
-                    persona=person
-                )
-            
-            messages.success(request, f'Successfully imported {len(df)} Visa transactions!')
-        except Exception as e:
-            messages.error(request, f'Error importing Visa data: {str(e)}')
-        
-        return redirect('list_transacciones')
-    
-    return render(request, 'transacciones/import_visa.html')
-"@ | Out-File -FilePath "transacciones/views.py" -Encoding utf8
-
-    # Create urls.py for bienes app
+    # Create urls.py for persons app
     @"
 from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.list_bienes, name='list_bienes'),
-    path('import/', views.import_bienes, name='import_bienes'),
+    path('', views.main, name='main'),
+    path('persons/', views.persons, name='persons'),
+    path('persons/details/<int:id>', views.details, name='details'),
+    path('persons/import/', views.import_from_excel, name='import_excel'),
 ]
-"@ | Out-File -FilePath "bienes/urls.py" -Encoding utf8
+"@ | Out-File -FilePath "persons/urls.py" -Encoding utf8
 
-    # Create urls.py for transacciones app
+    # Create admin.py with enhanced configuration
     @"
-from django.urls import path
-from . import views
+from django.contrib import admin
+from .models import Person
 
-urlpatterns = [
-    path('', views.list_transacciones, name='list_transacciones'),
-    path('import-mastercard/', views.import_mastercard, name='import_mastercard'),
-    path('import-visa/', views.import_visa, name='import_visa'),
-]
-"@ | Out-File -FilePath "transacciones/urls.py" -Encoding utf8
+def make_active(modeladmin, request, queryset):
+    queryset.update(estado='Activo')
+make_active.short_description = "Mark selected as Active"
 
-    # Update project urls.py
+def make_retired(modeladmin, request, queryset):
+    queryset.update(estado='Retirado')
+make_retired.short_description = "Mark selected as Retired"
+
+class PersonAdmin(admin.ModelAdmin):
+    list_display = ("id", "nombre_completo", "cargo", "cedula", "correo", "compania", "estado")
+    search_fields = ("nombre_completo", "cedula")
+    list_filter = ("estado", "compania")
+    list_per_page = 25
+    ordering = ('nombre_completo',)
+    actions = [make_active, make_retired]
+    
+    fieldsets = (
+        (None, {
+            'fields': ('id', 'nombre_completo', 'cargo', 'cedula')
+        }),
+        ('Advanced options', {
+            'classes': ('collapse',),
+            'fields': ('correo', 'compania', 'estado'),
+        }),
+    )
+    
+admin.site.register(Person, PersonAdmin)
+"@ | Out-File -FilePath "persons/admin.py" -Encoding utf8
+
+    # Update project urls.py with proper admin configuration
     @"
 from django.contrib import admin
 from django.urls import include, path
 
 # Customize default admin interface
-admin.site.site_header = 'ARPA Admin Portal'
+admin.site.site_header = 'ARPA Administration'
 admin.site.site_title = 'ARPA Admin Portal'
+admin.site.index_title = 'Welcome to ARPA Administration'
 
 urlpatterns = [
     path('persons/', include('persons.urls')),
-    path('bienes/', include('bienes.urls')),
-    path('transacciones/', include('transacciones.urls')),
     path('admin/', admin.site.urls),
     path('', include('persons.urls')), 
 ]
 "@ | Out-File -FilePath "arpa/urls.py" -Encoding utf8
 
-    # Create templates for bienes app
-    $bienesTemplates = @(
-        "bienes/templates/bienes",
-        "bienes/templates/bienes/admin"
+    # Create templates directory structure
+    $directories = @(
+        "persons/templates",
+        "persons/templates/admin",
+        "persons/templates/admin/persons"
     )
-    foreach ($dir in $bienesTemplates) {
+    foreach ($dir in $directories) {
         New-Item -Path $dir -ItemType Directory -Force
     }
 
-    # Create list template for bienes
+    # Create custom admin base template
     @"
-{% extends "master.html" %}
+{% extends "admin/base.html" %}
 
-{% block title %}
-    Bienes y Rentas
+{% block title %}{{ title }} | {{ site_title|default:_('ARPA Administration') }}{% endblock %}
+
+{% block branding %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('ARPA Administration') }}</a></h1>
 {% endblock %}
 
-{% block content %}
-    <div class="d-flex justify-content-between mb-4">
-        <a href="/" class="btn btn-secondary">Inicio</a>
-        <div>
-            <a href="import/" class="btn btn-primary">Cargar Datos</a>
+{% block nav-global %}{% endblock %}
+"@ | Out-File -FilePath "persons/templates/admin/base_site.html" -Encoding utf8
+
+    # Create master template
+    @"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .navbar-custom {
+            background-color: #0056b3;
+        }
+        .footer {
+            background-color: #343a40;
+            color: white;
+            padding: 20px 0;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">ARPA</a>
         </div>
-    </div>
+    </nav>
     
-    <h1 class="mb-4">Bienes y Rentas</h1>
-    
-    <div class="table-responsive">
-        <table class="table table-striped table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>Cédula</th>
-                    <th>Nombre</th>
-                    <th>Compañía</th>
-                    <th>Activos</th>
-                    <th>Patrimonio</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for bien in bienes %}
-                    <tr>
-                        <td>{{ bien.Cedula }}</td>
-                        <td>{{ bien.Nombre }}</td>
-                        <td>{{ bien.Compañía }}</td>
-                        <td>{{ bien.Activos }}</td>
-                        <td>{{ bien.Patrimonio }}</td>
-                        <td>
-                            <a href="/admin/bienes/bienesyrentas/{{ bien.id }}/change/" class="btn btn-warning btn-sm">Editar</a>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-{% endblock %}
-"@ | Out-File -FilePath "bienes/templates/bienes/list.html" -Encoding utf8
-
-    # Create import template for bienes
-    @"
-{% extends "master.html" %}
-
-{% block title %}
-    Cargar Bienes y Rentas
-{% endblock %}
-
-{% block content %}
-    <div class="card">
-        <div class="card-body">
-            <form method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <input type="file" class="form-control" id="excel_file" name="excel_file" required>
-                    <div class="form-text">El archivo debe incluir todas las columnas del modelo Bienes y Rentas</div>
+    <div class="container mt-4">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
-                <button type="submit" class="btn btn-primary">Cargar</button>
-                <a href="/bienes/" class="btn btn-secondary">Cancelar</a>
-            </form>
-        </div>
-    </div>
-{% endblock %}
-"@ | Out-File -FilePath "bienes/templates/bienes/import.html" -Encoding utf8
-
-    # Create templates for transacciones app
-    $transaccionesTemplates = @(
-        "transacciones/templates/transacciones",
-        "transacciones/templates/transacciones/admin"
-    )
-    foreach ($dir in $transaccionesTemplates) {
-        New-Item -Path $dir -ItemType Directory -Force
-    }
-
-    # Create list template for transacciones
-    @"
-{% extends "master.html" %}
-
-{% block title %}
-    Transacciones de Tarjetas
-{% endblock %}
-
-{% block content %}
-    <div class="d-flex justify-content-between mb-4">
-        <a href="/" class="btn btn-secondary">Inicio</a>
-        <div>
-            <a href="import-mastercard/" class="btn btn-primary me-2">Cargar Mastercard</a>
-            <a href="import-visa/" class="btn btn-success">Cargar Visa</a>
-        </div>
+            {% endfor %}
+        {% endif %}
+        
+        {% block content %}
+        {% endblock %}
     </div>
     
-    <h1 class="mb-4">Transacciones de Tarjetas</h1>
+    <footer class="footer">
+        <div class="container text-center">
+            <p class="mb-0">© 2025 ARPA Management System</p>
+        </div>
+    </footer>
     
-    <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
-            <h2>Mastercard</h2>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead>
-                        <tr>
-                            <th>Tarjetahabiente</th>
-                            <th>Fecha</th>
-                            <th>Descripción</th>
-                            <th>Valor</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for trans in transacciones_mc %}
-                            <tr>
-                                <td>{{ trans.Tarjetahabiente }}</td>
-                                <td>{{ trans.Fecha_de_Transacción }}</td>
-                                <td>{{ trans.Descripción }}</td>
-                                <td>{{ trans.Valor_Original }}</td>
-                                <td>
-                                    <a href="/admin/transacciones/transaccionestarjetas/{{ trans.id }}/change/" class="btn btn-warning btn-sm">Editar</a>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    
-    <div class="card">
-        <div class="card-header bg-success text-white">
-            <h2>Visa</h2>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead>
-                        <tr>
-                            <th>Tarjetahabiente</th>
-                            <th>Fecha</th>
-                            <th>Descripción</th>
-                            <th>Valor</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for trans in transacciones_visa %}
-                            <tr>
-                                <td>{{ trans.Tarjetahabiente }}</td>
-                                <td>{{ trans.Fecha_de_Transacción }}</td>
-                                <td>{{ trans.Descripción }}</td>
-                                <td>{{ trans.Valor_Original }}</td>
-                                <td>
-                                    <a href="/admin/transacciones/transaccionesvisa/{{ trans.id }}/change/" class="btn btn-warning btn-sm">Editar</a>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-{% endblock %}
-"@ | Out-File -FilePath "transacciones/templates/transacciones/list.html" -Encoding utf8
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+"@ | Out-File -FilePath "persons/templates/master.html" -Encoding utf8
 
-    # Create import template for mastercard
-    @"
-{% extends "master.html" %}
-
-{% block title %}
-    Cargar Transacciones Mastercard
-{% endblock %}
-
-{% block content %}
-    <div class="card">
-        <div class="card-body">
-            <form method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <input type="file" class="form-control" id="excel_file" name="excel_file" required>
-                    <div class="form-text">El archivo debe incluir las columnas del extracto Mastercard</div>
-                </div>
-                <button type="submit" class="btn btn-primary">Cargar</button>
-                <a href="/transacciones/" class="btn btn-secondary">Cancelar</a>
-            </form>
-        </div>
-    </div>
-{% endblock %}
-"@ | Out-File -FilePath "transacciones/templates/transacciones/import_mastercard.html" -Encoding utf8
-
-    # Create import template for visa
-    @"
-{% extends "master.html" %}
-
-{% block title %}
-    Cargar Transacciones Visa
-{% endblock %}
-
-{% block content %}
-    <div class="card">
-        <div class="card-body">
-            <form method="post" enctype="multipart/form-data">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <input type="file" class="form-control" id="excel_file" name="excel_file" required>
-                    <div class="form-text">El archivo debe incluir las columnas del extracto Visa</div>
-                </div>
-                <button type="submit" class="btn btn-primary">Cargar</button>
-                <a href="/transacciones/" class="btn btn-secondary">Cancelar</a>
-            </form>
-        </div>
-    </div>
-{% endblock %}
-"@ | Out-File -FilePath "transacciones/templates/transacciones/import_visa.html" -Encoding utf8
-
-    # Update main template to include new menu items
+    # Create main template
     @"
 {% extends "master.html" %}
 
@@ -631,69 +248,167 @@ urlpatterns = [
 
 {% block content %}
     <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h1 class="mb-0">A R P A</h1>
+        </div>
         <div class="card-body">
+            <h3 class="card-title">Person Management System</h3>
             <div class="d-grid gap-3 mt-4">
-                <a href="persons/" class="btn btn-primary btn-lg">Personas</a>
-                <a href="bienes/" class="btn btn-info btn-lg">Bienes y Rentas</a>
-                <a href="transacciones/" class="btn btn-warning btn-lg">Transacciones Tarjetas</a>
-                <a href="/admin/" class="btn btn-dark btn-lg">ARPA Admin Portal</a>
+                <a href="persons/" class="btn btn-primary btn-lg">View All Persons</a>
+                <a href="persons/import/" class="btn btn-success btn-lg">Import from Excel</a>
+                <a href="/admin/" class="btn btn-dark btn-lg">Admin Portal</a>
             </div>
         </div>
     </div>
 {% endblock %}
 "@ | Out-File -FilePath "persons/templates/main.html" -Encoding utf8
 
-    # Create admin.py for bienes app
+    # Create all persons template
     @"
-from django.contrib import admin
-from .models import BienesyRentas
+{% extends "master.html" %}
 
-@admin.register(BienesyRentas)
-class BienesyRentasAdmin(admin.ModelAdmin):
-    list_display = ('Cedula', 'Nombre', 'Compañía', 'Activos', 'Patrimonio')
-    search_fields = ('Cedula', 'Nombre')
-    list_filter = ('Compañía',)
-    list_per_page = 25
-    ordering = ('Nombre',)
+{% block title %}
+    All Persons
+{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between mb-4">
+        <a href="/" class="btn btn-secondary">Home</a>
+        <div>
+            <a href="/persons/import/" class="btn btn-primary">Import Data</a>
+            <a href="/admin/persons/person/add/" class="btn btn-success ms-2">Add New</a>
+        </div>
+    </div>
     
-    fieldsets = (
-        (None, {
-            'fields': ('Cedula', 'Nombre', 'Compañía', 'Cargo')
-        }),
-        ('Datos Financieros', {
-            'classes': ('collapse',),
-            'fields': ('Activos', 'Pasivos', 'Patrimonio', 'Apalancamiento', 'Endeudamiento'),
-        }),
-    )
-"@ | Out-File -FilePath "bienes/admin.py" -Encoding utf8
+    <h1 class="mb-4">Person List</h1>
+    
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre Completo</th>
+                    <th>Cargo</th>
+                    <th>Cedula</th>
+                    <th>Correo</th>
+                    <th>Compania</th>
+                    <th>Estado</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for person in mypersons %}
+                    <tr>
+                        <td>{{ person.id }}</td>
+                        <td>{{ person.nombre_completo }}</td>
+                        <td>{{ person.cargo }}</td>
+                        <td>{{ person.cedula }}</td>
+                        <td>{{ person.correo }}</td>
+                        <td>{{ person.compania }}</td>
+                        <td>
+                            <span class="badge bg-{% if person.estado == 'Activo' %}success{% else %}danger{% endif %}">
+                                {{ person.estado }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="details/{{ person.id }}" class="btn btn-info btn-sm">Details</a>
+                            <a href="/admin/persons/person/{{ person.id }}/change/" class="btn btn-warning btn-sm">Edit</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}
+"@ | Out-File -FilePath "persons/templates/all_persons.html" -Encoding utf8
 
-    # Create admin.py for transacciones app
+    # Create import template
     @"
-from django.contrib import admin
-from .models import TransaccionesTarjetas, TransaccionesVisa
+{% extends "master.html" %}
 
-@admin.register(TransaccionesTarjetas)
-class TransaccionesTarjetasAdmin(admin.ModelAdmin):
-    list_display = ('Tarjetahabiente', 'Fecha_de_Transacción', 'Descripción', 'Valor_Original', 'Moneda')
-    search_fields = ('Tarjetahabiente', 'Número_de_Tarjeta')
-    list_filter = ('Moneda',)
-    list_per_page = 25
-    ordering = ('-Fecha_de_Transacción',)
+{% block title %}
+    Import from Excel
+{% endblock %}
 
-@admin.register(TransaccionesVisa)
-class TransaccionesVisaAdmin(admin.ModelAdmin):
-    list_display = ('Tarjetahabiente', 'Fecha_de_Transacción', 'Descripción', 'Valor_Original')
-    search_fields = ('Tarjetahabiente', 'Número_de_Tarjeta')
-    list_per_page = 25
-    ordering = ('-Fecha_de_Transacción',)
-"@ | Out-File -FilePath "transacciones/admin.py" -Encoding utf8
+{% block content %}
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h1>Import Data from Excel</h1>
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="excel_file" class="form-label">Select Excel File:</label>
+                    <input type="file" class="form-control" id="excel_file" name="excel_file" required>
+                    <div class="form-text">File should include columns: id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
+                </div>
+                <button type="submit" class="btn btn-primary">Import</button>
+                <a href="/persons/" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+"@ | Out-File -FilePath "persons/templates/import_excel.html" -Encoding utf8
+
+    # Create details template
+    @"
+{% extends "master.html" %}
+
+{% block title %}
+    Details - {{ myperson.nombre_completo }}
+{% endblock %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h1>{{ myperson.nombre_completo }}</h1>
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <tr>
+                    <th>ID:</th>
+                    <td>{{ myperson.id }}</td>
+                </tr>
+                <tr>
+                    <th>Cargo:</th>
+                    <td>{{ myperson.cargo }}</td>
+                </tr>
+                <tr>
+                    <th>Cedula:</th>
+                    <td>{{ myperson.cedula }}</td>
+                </tr>
+                <tr>
+                    <th>Correo:</th>
+                    <td>{{ myperson.correo }}</td>
+                </tr>
+                <tr>
+                    <th>Compania:</th>
+                    <td>{{ myperson.compania }}</td>
+                </tr>
+                <tr>
+                    <th>Estado:</th>
+                    <td>
+                        <span class="badge bg-{% if myperson.estado == 'Activo' %}success{% else %}danger{% endif %}">
+                            {{ myperson.estado }}
+                        </span>
+                    </td>
+                </tr>
+            </table>
+            
+            <div class="mt-3">
+                <a href="/persons/" class="btn btn-primary">Back to Persons</a>
+                <a href="/admin/persons/person/{{ myperson.id }}/change/" class="btn btn-warning ms-2">Edit in Admin</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+"@ | Out-File -FilePath "persons/templates/details.html" -Encoding utf8
 
     # Update settings.py
     $settingsContent = Get-Content -Path ".\arpa\settings.py" -Raw
     $settingsContent = $settingsContent -replace "INSTALLED_APPS = \[", "INSTALLED_APPS = [
-    'persons.apps.PersonsConfig',
-    'bienes.apps.BienesConfig',
-    'transacciones.apps.TransaccionesConfig',"
+    'persons.apps.PersonsConfig',"
     $settingsContent = $settingsContent -replace "from pathlib import Path", "from pathlib import Path
 import os"
     $settingsContent | Set-Content -Path ".\arpa\settings.py"
@@ -707,10 +422,15 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Custom admin skin
+ADMIN_SITE_HEADER = "ARPA Administration"
+ADMIN_SITE_TITLE = "ARPA Admin Portal"
+ADMIN_INDEX_TITLE = "Welcome to ARPA Administration"
 "@
 
     # Run migrations
-    python manage.py makemigrations
+    python manage.py makemigrations persons
     python manage.py migrate
 
     # Create superuser

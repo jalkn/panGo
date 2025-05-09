@@ -79,6 +79,26 @@ erDiagram
         DATE Fecha_Salida
     }
 
+    Conflictos {
+        INT ID PK "Primary Key"
+        VARCHAR Cedula
+        VARCHAR Nombre
+        VARCHAR Compania
+        VARCHAR Cargo
+        VARCHAR Email
+        DATE Fecha_de_Inicio
+        BOOLEAN Q1
+        BOOLEAN Q2
+        BOOLEAN Q3
+        BOOLEAN Q4
+        BOOLEAN Q5
+        BOOLEAN Q6
+        BOOLEAN Q7
+        BOOLEAN Q8
+        BOOLEAN Q9
+        BOOLEAN Q10
+    }
+
     TarjetasMasterCard {
         VARCHAR Archivo
         VARCHAR Tarjetahabiente
@@ -111,26 +131,6 @@ erDiagram
         DECIMAL Saldo a Diferir
         VARCHAR Cuotas
         INT Página
-    }
-
-    Conflictos {
-        INT ID PK "Primary Key"
-        VARCHAR Cedula
-        VARCHAR Nombre
-        VARCHAR Compañía
-        VARCHAR Cargo
-        VARCHAR Email
-        DATE Fecha_de_Inicio
-        BOOLEAN Q1
-        BOOLEAN Q2
-        BOOLEAN Q3
-        BOOLEAN Q4
-        BOOLEAN Q5
-        BOOLEAN Q6
-        BOOLEAN Q7
-        BOOLEAN Q8
-        BOOLEAN Q9
-        BOOLEAN Q10
     }
 
     InformesAuditoria {
