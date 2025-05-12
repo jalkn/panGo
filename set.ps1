@@ -18,7 +18,7 @@ function migratoDjango {
     # Create persons app
     python manage.py startapp persons
 
-    # Create models.py with all required fields including ID
+    # Create models.py with cedula as primary key
     @"
 from django.db import models
 
@@ -28,16 +28,15 @@ class Person(models.Model):
         ('Retirado', 'Retirado'),
     ]
     
-    id = models.IntegerField(primary_key=True)
+    cedula = models.CharField(max_length=20, primary_key=True, verbose_name="Cedula")
     nombre_completo = models.CharField(max_length=255, verbose_name="Nombre Completo")
     cargo = models.CharField(max_length=255, verbose_name="Cargo")
-    cedula = models.CharField(max_length=20, verbose_name="Cedula")
     correo = models.EmailField(max_length=255, verbose_name="Correo")
     compania = models.CharField(max_length=255, verbose_name="Compania")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='Activo', verbose_name="Estado")
 
     def __str__(self):
-        return f"{self.id} - {self.nombre_completo}"
+        return f"{self.cedula} - {self.nombre_completo}"
 
     class Meta:
         verbose_name = "Persona"
@@ -59,8 +58,8 @@ def persons(request):
     context = {'mypersons': mypersons}
     return HttpResponse(template.render(context, request))
   
-def details(request, id):
-    myperson = Person.objects.get(id=id)
+def details(request, cedula):
+    myperson = Person.objects.get(cedula=cedula)
     template = loader.get_template('details.html')
     context = {'myperson': myperson}
     return HttpResponse(template.render(context, request))
@@ -77,11 +76,10 @@ def import_from_excel(request):
             
             for _, row in df.iterrows():
                 Person.objects.update_or_create(
-                    id=row['Id'],
+                    cedula=row['Cedula'],
                     defaults={
                         'nombre_completo': row['NOMBRE COMPLETO'],
                         'cargo': row['CARGO'],
-                        'cedula': row['Cedula'],
                         'correo': row['Correo'],
                         'compania': row['Compania'],
                         'estado': row['Estado']
@@ -105,7 +103,7 @@ from . import views
 urlpatterns = [
     path('', views.main, name='main'),
     path('persons/', views.persons, name='persons'),
-    path('persons/details/<int:id>', views.details, name='details'),
+    path('persons/details/<str:cedula>', views.details, name='details'),
     path('persons/import/', views.import_from_excel, name='import_excel'),
 ]
 "@ | Out-File -FilePath "persons/urls.py" -Encoding utf8
@@ -124,7 +122,7 @@ def make_retired(modeladmin, request, queryset):
 make_retired.short_description = "Mark selected as Retired"
 
 class PersonAdmin(admin.ModelAdmin):
-    list_display = ("id", "nombre_completo", "cargo", "cedula", "correo", "compania", "estado")
+    list_display = ("cedula", "nombre_completo", "cargo", "correo", "compania", "estado")
     search_fields = ("nombre_completo", "cedula")
     list_filter = ("estado", "compania")
     list_per_page = 25
@@ -133,7 +131,7 @@ class PersonAdmin(admin.ModelAdmin):
     
     fieldsets = (
         (None, {
-            'fields': ('id', 'nombre_completo', 'cargo', 'cedula')
+            'fields': ('cedula', 'nombre_completo', 'cargo')
         }),
         ('Advanced options', {
             'classes': ('collapse',),
@@ -257,14 +255,9 @@ urlpatterns = [
 
 {% block content %}
     <div class="card">
-        <!--<div class="card-header bg-primary text-white">
-            <h1 class="mb-0">A R P A</h1>
-        </div>-->
         <div class="card-body">
-            <!--<h3 class="card-title">Person Management System</h3>-->
             <div class="d-grid gap-3 mt-4">
                 <a href="persons/" class="btn btn-primary btn-lg">Personas</a>
-                <!--<a href="persons/import/" class="btn btn-success btn-lg">Importar Archivo Excel</a>-->
                 <a href="bienesyRentas/" class="btn btn-primary btn-lg">Bienes y Rentas</a>
                 <a href="conflictos/" class="btn btn-primary btn-lg">Conflictos de Interes</a>
                 <a href="/admin/" class="btn btn-dark btn-lg">Admin ARPA</a>
@@ -283,7 +276,6 @@ urlpatterns = [
 
 {% block navbar_buttons %}
     <a href="/persons/import/" class="nav-link btn btn-primary me-2">Importar Datos</a>
-    <!--<a href="/admin/persons/person/add/" class="nav-link btn btn-success">Agregar</a>-->
 {% endblock %}
 
 {% block content %}
@@ -295,7 +287,6 @@ urlpatterns = [
                     <th>ID</th>
                     <th>Nombre Completo</th>
                     <th>Cargo</th>
-                    <th>Cedula</th>
                     <th>Correo</th>
                     <th>Compania</th>
                     <th>Estado</th>
@@ -305,10 +296,9 @@ urlpatterns = [
             <tbody>
                 {% for person in mypersons %}
                     <tr>
-                        <td>{{ person.id }}</td>
+                        <td>{{ person.cedula }}</td>
                         <td>{{ person.nombre_completo }}</td>
                         <td>{{ person.cargo }}</td>
-                        <td>{{ person.cedula }}</td>
                         <td>{{ person.correo }}</td>
                         <td>{{ person.compania }}</td>
                         <td>
@@ -317,8 +307,8 @@ urlpatterns = [
                             </span>
                         </td>
                         <td>
-                            <a href="details/{{ person.id }}" class="btn btn-info btn-sm">Ver</a>
-                            <a href="/admin/persons/person/{{ person.id }}/change/" class="btn btn-warning btn-sm">Editar</a>
+                            <a href="details/{{ person.cedula }}" class="btn btn-info btn-sm">Ver</a>
+                            <a href="/admin/persons/person/{{ person.cedula }}/change/" class="btn btn-warning btn-sm">Editar</a>
                         </td>
                     </tr>
                 {% endfor %}
@@ -335,11 +325,6 @@ urlpatterns = [
 {% block title %}Importar desde Excel{% endblock %}
 {% block navbar_title %}Importar Datos{% endblock %}
 
-{% block navbar_buttons %}
-    <!--<a href="/persons/import/" class="nav-link btn btn-primary me-2">Importar Datos</a>-->
-    <!--<a href="/admin/persons/person/add/" class="nav-link btn btn-success">Agregar</a>-->
-{% endblock %}
-
 {% block content %}
     <div class="card">
         <div class="card-body">
@@ -347,7 +332,7 @@ urlpatterns = [
                 {% csrf_token %}
                 <div class="mb-3">
                     <input type="file" class="form-control" id="excel_file" name="excel_file" required>
-                    <div class="form-text">El archivo debe incluir las columnas: id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
+                    <div class="form-text">El archivo debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
                 </div>
                 <button type="submit" class="btn btn-primary">Importar</button>
                 <a href="/persons/" class="btn btn-secondary">Cancelar</a>
@@ -364,29 +349,21 @@ urlpatterns = [
 {% block title %}Detalles - {{ myperson.nombre_completo }}{% endblock %}
 {% block navbar_title %}Detalles: {{ myperson.nombre_completo }}{% endblock %}
 
-{% block navbar_buttons %}
-    <a href="/persons/import/" class="nav-link btn btn-primary me-2">Importar Datos</a>
-    <a href="/admin/persons/person/add/" class="nav-link btn btn-success">Agregar</a>
-{% endblock %}
-
 {% block content %}
     <div class="card">
-        <div class="card-header bg-info text-white">
-            <h1>{{ myperson.nombre_completo }}</h1>
-        </div>
         <div class="card-body">
             <table class="table">
                 <tr>
                     <th>ID:</th>
-                    <td>{{ myperson.id }}</td>
+                    <td>{{ myperson.cedula }}</td>
+                </tr>
+                <tr>
+                    <th>Nombre Completo:</th>
+                    <td>{{ myperson.nombre_completo }}</td>
                 </tr>
                 <tr>
                     <th>Cargo:</th>
                     <td>{{ myperson.cargo }}</td>
-                </tr>
-                <tr>
-                    <th>Cedula:</th>
-                    <td>{{ myperson.cedula }}</td>
                 </tr>
                 <tr>
                     <th>Correo:</th>
@@ -407,8 +384,8 @@ urlpatterns = [
             </table>
             
             <div class="mt-3">
-                <a href="/persons/persons/" class="btn btn-primary">Regresar</a>
-                <a href="/admin/persons/person/{{ myperson.id }}/change/" class="btn btn-warning ms-2">Editar</a>
+                <a href="/persons/" class="btn btn-primary">Regresar</a>
+                <a href="/admin/persons/person/{{ myperson.cedula }}/change/" class="btn btn-warning ms-2">Editar</a>
             </div>
         </div>
     </div>
@@ -464,11 +441,10 @@ from persons.models import Person
 df = pd.read_excel(r'$ExcelFilePath')
 for _, row in df.iterrows():
     Person.objects.update_or_create(
-        id=row['Id'],
+        cedula=row['Cedula'],
         defaults={
             'nombre_completo': row['NOMBRE COMPLETO'],
             'cargo': row['CARGO'],
-            'cedula': row['Cedula'],
             'correo': row['Correo'],
             'compania': row['Compania'],
             'estado': row['Estado']
