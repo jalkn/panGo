@@ -55,7 +55,7 @@ from django.contrib import messages
 
 def persons(request):
     mypersons = Person.objects.all()
-    template = loader.get_template('all_persons.html')
+    template = loader.get_template('persons.html')
     context = {'mypersons': mypersons}
     return HttpResponse(template.render(context, request))
   
@@ -204,12 +204,22 @@ urlpatterns = [
             padding: 20px 0;
             margin-top: 40px;
         }
+        .navbar-title {
+            color: white;
+            margin-right: auto;
+            padding-left: 15px;
+            font-size: 1.25rem;
+        }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom mb-4">
-        <div class="container">
+        <div class="container-fluid">
             <a class="navbar-brand" href="/">ARPA</a>
+            <div class="navbar-title">{% block navbar_title %}{% endblock %}</div>
+            <div class="navbar-nav">
+                {% block navbar_buttons %}{% endblock %}
+            </div>
         </div>
     </nav>
     
@@ -226,12 +236,12 @@ urlpatterns = [
         {% block content %}
         {% endblock %}
     </div>
-    
-    <footer class="footer">
+
+    <!--<footer class="footer">
         <div class="container text-center">
-            <p class="mb-0">© 2025 ARPA Management System</p>
+            <p class="mb-0">© 2025 ARPA</p>
         </div>
-    </footer>
+    </footer>-->
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
@@ -242,21 +252,22 @@ urlpatterns = [
     @"
 {% extends "master.html" %}
 
-{% block title %}
-    A R P A
-{% endblock %}
+{% block title %}A R P A{% endblock %}
+{% block navbar_title %}{% endblock %}
 
 {% block content %}
     <div class="card">
-        <div class="card-header bg-primary text-white">
+        <!--<div class="card-header bg-primary text-white">
             <h1 class="mb-0">A R P A</h1>
-        </div>
+        </div>-->
         <div class="card-body">
-            <h3 class="card-title">Person Management System</h3>
+            <!--<h3 class="card-title">Person Management System</h3>-->
             <div class="d-grid gap-3 mt-4">
-                <a href="persons/" class="btn btn-primary btn-lg">View All Persons</a>
-                <a href="persons/import/" class="btn btn-success btn-lg">Import from Excel</a>
-                <a href="/admin/" class="btn btn-dark btn-lg">Admin Portal</a>
+                <a href="persons/" class="btn btn-primary btn-lg">Personas</a>
+                <!--<a href="persons/import/" class="btn btn-success btn-lg">Importar Archivo Excel</a>-->
+                <a href="bienesyRentas/" class="btn btn-primary btn-lg">Bienes y Rentas</a>
+                <a href="conflictos/" class="btn btn-primary btn-lg">Conflictos de Interes</a>
+                <a href="/admin/" class="btn btn-dark btn-lg">Admin ARPA</a>
             </div>
         </div>
     </div>
@@ -267,20 +278,15 @@ urlpatterns = [
     @"
 {% extends "master.html" %}
 
-{% block title %}
-    All Persons
+{% block title %}Personas{% endblock %}
+{% block navbar_title %}Personas{% endblock %}
+
+{% block navbar_buttons %}
+    <a href="/persons/import/" class="nav-link btn btn-primary me-2">Importar Datos</a>
+    <!--<a href="/admin/persons/person/add/" class="nav-link btn btn-success">Agregar</a>-->
 {% endblock %}
 
 {% block content %}
-    <div class="d-flex justify-content-between mb-4">
-        <a href="/" class="btn btn-secondary">Home</a>
-        <div>
-            <a href="/persons/import/" class="btn btn-primary">Import Data</a>
-            <a href="/admin/persons/person/add/" class="btn btn-success ms-2">Add New</a>
-        </div>
-    </div>
-    
-    <h1 class="mb-4">Person List</h1>
     
     <div class="table-responsive">
         <table class="table table-striped table-hover">
@@ -311,8 +317,8 @@ urlpatterns = [
                             </span>
                         </td>
                         <td>
-                            <a href="details/{{ person.id }}" class="btn btn-info btn-sm">Details</a>
-                            <a href="/admin/persons/person/{{ person.id }}/change/" class="btn btn-warning btn-sm">Edit</a>
+                            <a href="details/{{ person.id }}" class="btn btn-info btn-sm">Ver</a>
+                            <a href="/admin/persons/person/{{ person.id }}/change/" class="btn btn-warning btn-sm">Editar</a>
                         </td>
                     </tr>
                 {% endfor %}
@@ -320,31 +326,31 @@ urlpatterns = [
         </table>
     </div>
 {% endblock %}
-"@ | Out-File -FilePath "persons/templates/all_persons.html" -Encoding utf8
+"@ | Out-File -FilePath "persons/templates/persons.html" -Encoding utf8
 
     # Create import template
     @"
 {% extends "master.html" %}
 
-{% block title %}
-    Import from Excel
+{% block title %}Importar desde Excel{% endblock %}
+{% block navbar_title %}Importar Datos{% endblock %}
+
+{% block navbar_buttons %}
+    <!--<a href="/persons/import/" class="nav-link btn btn-primary me-2">Importar Datos</a>-->
+    <!--<a href="/admin/persons/person/add/" class="nav-link btn btn-success">Agregar</a>-->
 {% endblock %}
 
 {% block content %}
     <div class="card">
-        <div class="card-header bg-primary text-white">
-            <h1>Import Data from Excel</h1>
-        </div>
         <div class="card-body">
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="mb-3">
-                    <label for="excel_file" class="form-label">Select Excel File:</label>
                     <input type="file" class="form-control" id="excel_file" name="excel_file" required>
-                    <div class="form-text">File should include columns: id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
+                    <div class="form-text">El archivo debe incluir las columnas: id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
                 </div>
-                <button type="submit" class="btn btn-primary">Import</button>
-                <a href="/persons/" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Importar</button>
+                <a href="/persons/" class="btn btn-secondary">Cancelar</a>
             </form>
         </div>
     </div>
@@ -355,8 +361,12 @@ urlpatterns = [
     @"
 {% extends "master.html" %}
 
-{% block title %}
-    Details - {{ myperson.nombre_completo }}
+{% block title %}Detalles - {{ myperson.nombre_completo }}{% endblock %}
+{% block navbar_title %}Detalles: {{ myperson.nombre_completo }}{% endblock %}
+
+{% block navbar_buttons %}
+    <a href="/persons/import/" class="nav-link btn btn-primary me-2">Importar Datos</a>
+    <a href="/admin/persons/person/add/" class="nav-link btn btn-success">Agregar</a>
 {% endblock %}
 
 {% block content %}
@@ -397,8 +407,8 @@ urlpatterns = [
             </table>
             
             <div class="mt-3">
-                <a href="/persons/" class="btn btn-primary">Back to Persons</a>
-                <a href="/admin/persons/person/{{ myperson.id }}/change/" class="btn btn-warning ms-2">Edit in Admin</a>
+                <a href="/persons/persons/" class="btn btn-primary">Regresar</a>
+                <a href="/admin/persons/person/{{ myperson.id }}/change/" class="btn btn-warning ms-2">Editar</a>
             </div>
         </div>
     </div>
