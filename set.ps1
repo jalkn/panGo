@@ -188,15 +188,13 @@ urlpatterns = [
 <html>
 <head>
     <title>{% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
             margin: 0;
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        .navbar-custom {
-            background-color: #0056b3;
+            background-color: white;
         }
         .footer {
             background-color: #343a40;
@@ -214,7 +212,8 @@ urlpatterns = [
         .topnav-container {
             display: flex;
             align-items: center;
-            margin-bottom: 20px;
+            padding-right: 40px;
+            padding-left: 40px;
         }
         .logoIN {
             cursor: pointer;
@@ -248,6 +247,38 @@ urlpatterns = [
             font-weight: bold;
             font-size: 1.2rem;
         }
+
+        .full-width-container {
+            width: 100%;
+            padding-right: 10px;
+            padding-left: 10px;
+            margin-right: auto;
+            margin-left: auto;
+        }
+        
+        .card-full-width {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        
+        .table-full-width {
+            width: 100% !important;
+        }
+
+
+        .btn-custom-primary {
+            background-color: #ffffff;
+            border-color: #0b00a2;
+            color: #090086;
+        }
+        
+        .btn-custom-primary:hover,
+        .btn-custom-primary:focus {
+            background-color: #090086;
+            border-color: #090086;
+            color: white;
+        }
+</style>
     </style>
 </head>
 <body>
@@ -264,7 +295,7 @@ urlpatterns = [
         </div>
     </div>
     
-    <div class="container mt-4">
+    <div class="container-fluid mt-4 px-4">
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
@@ -279,7 +310,7 @@ urlpatterns = [
     </div>
     <!--<footer class="footer">
         <div class="container text-center">
-            <p class="mb-0">© 2025 ARPA</p>
+            <p class="mb-0">Â© 2025 ARPA</p>
         </div>
     </footer>-->
     
@@ -292,19 +323,23 @@ urlpatterns = [
     @"
 {% extends "master.html" %}
 {% block title %}A R P A{% endblock %}
-{% block navbar_title %}{% endblock %}
+{% block navbar_title %}Dashboard{% endblock %}
+
+{% block navbar_buttons %}
+    <a href="/admin/" class="btn btn-outline-dark btn-lg text-start"><i class="fas fa-cog me-2"></i>Admin</a>
+{% endblock %}
+
 {% block content %}
- <div class="card">
- <div class="card-body">
- <div class="d-flex flex-column gap-3 mt-4">
- <a href="persons/" class="btn btn-outline-primary btn-lg text-start"><i class="fas fa-users me-2"></i>Personas</a>
- <a href="bienesyRentas/" class="btn btn-outline-primary btn-lg text-start"><i class="fas fa-building me-2"></i>Bienes y Rentas</a>
- <a href="conflictos/" class="btn btn-outline-primary btn-lg text-start"><i class="fas fa-balance-scale me-2"></i>Conflictos de Interes</a>
- <a href="alertas/" class="btn btn-outline-danger btn-lg text-start"><i class="fas fa-exclamation-triangle me-2"></i>Alertas</a>
- <a href="/admin/" class="btn btn-outline-dark btn-lg text-start"><i class="fas fa-cog me-2"></i>Admin ARPA</a>
- </div>
- </div>
- </div>
+ 
+    <div class="card-body">
+        <div class="d-flex flex-column gap-3 mt-4">
+            <a href="persons/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-users me-2"></i>Personas</a>
+            <a href="bienesyRentas/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-building me-2"></i>Bienes y Rentas</a>
+            <a href="conflictos/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-balance-scale me-2"></i>Conflictos de Interes</a>
+            <a href="alertas/" class="btn btn-outline-danger btn-lg text-start"><i class="fas fa-exclamation-triangle me-2"></i>Alertas</a>
+        </div>
+    </div>
+
 
 <!-- Font Awesome CDN link -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
@@ -319,46 +354,48 @@ urlpatterns = [
 {% block navbar_title %}Personas{% endblock %}
 
 {% block navbar_buttons %}
-    <a href="/persons/import/" class="nav-link btn btn-primary me-2">Importar Datos</a>
+    <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-database"></i></a>
 {% endblock %}
 
 {% block content %}
-    
-    <div class="table-responsive">
-        <table class="table table-striped table-hover">
-            <thead class="table-dark">
-                <tr>
-                    <th>ID</th>
-                    <th>Nombre Completo</th>
-                    <th>Cargo</th>
-                    <th>Correo</th>
-                    <th>Compania</th>
-                    <th>Estado</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for person in mypersons %}
+<div class="card border-0 shadow">  <!-- Added border-0 shadow for better appearance -->
+    <div class="card-body p-0">  <!-- Added p-0 to remove inner padding -->
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">  <!-- Added mb-0 -->
+                <thead class="table-dark">
                     <tr>
-                        <td>{{ person.cedula }}</td>
-                        <td>{{ person.nombre_completo }}</td>
-                        <td>{{ person.cargo }}</td>
-                        <td>{{ person.correo }}</td>
-                        <td>{{ person.compania }}</td>
-                        <td>
-                            <span class="badge bg-{% if person.estado == 'Activo' %}success{% else %}danger{% endif %}">
-                                {{ person.estado }}
-                            </span>
-                        </td>
-                        <td>
-                            <a href="details/{{ person.cedula }}" class="btn btn-info btn-sm">Ver</a>
-                            <a href="/admin/persons/person/{{ person.cedula }}/change/" class="btn btn-warning btn-sm">Editar</a>
-                        </td>
+                        <th>ID</th>
+                        <th>Nombre Completo</th>
+                        <th>Cargo</th>
+                        <th>Correo</th>
+                        <th>Compania</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    {% for person in mypersons %}
+                        <tr>
+                            <td>{{ person.cedula }}</td>
+                            <td>{{ person.nombre_completo }}</td>
+                            <td>{{ person.cargo }}</td>
+                            <td>{{ person.correo }}</td>
+                            <td>{{ person.compania }}</td>
+                            <td>
+                                <span class="badge bg-{% if person.estado == 'Activo' %}success{% else %}danger{% endif %}">
+                                    {{ person.estado }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="details/{{ person.cedula }}" class="btn btn-custom-primary btn-lg text-start"><i class="bi bi-person-vcard-fill"></i></a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
+</div>
 {% endblock %}
 "@ | Out-File -FilePath "persons/templates/persons.html" -Encoding utf8
 
@@ -376,10 +413,10 @@ urlpatterns = [
                 {% csrf_token %}
                 <div class="mb-3">
                     <input type="file" class="form-control" id="excel_file" name="excel_file" required>
-                    <div class="form-text">El archivo debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
+                    <div class="form-text">El archivo Excel debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
                 </div>
-                <button type="submit" class="btn btn-primary">Importar</button>
-                <a href="/persons/" class="btn btn-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar</button>
+                <a href="/persons/persons/" class="btn btn-custom-primary btn-lg text-start">Cancelar</a>
             </form>
         </div>
     </div>
@@ -391,7 +428,7 @@ urlpatterns = [
 {% extends "master.html" %}
 
 {% block title %}Detalles - {{ myperson.nombre_completo }}{% endblock %}
-{% block navbar_title %}Detalles: {{ myperson.nombre_completo }}{% endblock %}
+{% block navbar_title %}{{ myperson.nombre_completo }}{% endblock %}
 
 {% block content %}
     <div class="card">
@@ -428,8 +465,8 @@ urlpatterns = [
             </table>
             
             <div class="mt-3">
-                <a href="/persons/" class="btn btn-primary">Regresar</a>
-                <a href="/admin/persons/person/{{ myperson.cedula }}/change/" class="btn btn-warning ms-2">Editar</a>
+                <a href="/persons/persons/" class="btn btn-custom-primary btn-lg text-start">Regresar</a>
+                <a href="/admin/persons/person/{{ myperson.cedula }}/change/" class="btn btn-custom-primary btn-lg text-start">Editar</a>
             </div>
         </div>
     </div>
