@@ -191,6 +191,8 @@ urlpatterns = [
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
+            margin: 0;
+            padding: 20px;
             background-color: #f8f9fa;
         }
         .navbar-custom {
@@ -203,23 +205,64 @@ urlpatterns = [
             margin-top: 40px;
         }
         .navbar-title {
-            color: white;
+            color: black;
             margin-right: auto;
             padding-left: 15px;
             font-size: 1.25rem;
+            cursor: pointer;
+        }
+        .topnav-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .logoIN {
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            background-color: #0b00a2;
+            border-radius: 8px;
+            display: inline-flex;
+            position: relative;
+        }
+        
+        .logoIN::before {
+            content: "";
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            position: absolute;
+            top: 30%;
+            left: 70%;
+            transform: translate(-50%, -50%);
+            background-image: linear-gradient(to right, 
+                #ffffff 2px, transparent 1.5px,
+                transparent 1.5px, #ffffff 1.5px,
+                #ffffff 2px, transparent 1.5px);
+            background-size: 4px 100%; 
+        }
+        
+        .nomPag {
+            margin-left: 10px;
+            color: #0b00a2;
+            font-weight: bold;
+            font-size: 1.2rem;
         }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom mb-4">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/">ARPA</a>
-            <div class="navbar-title">{% block navbar_title %}{% endblock %}</div>
-            <div class="navbar-nav">
-                {% block navbar_buttons %}{% endblock %}
-            </div>
+    <div class="topnav-container">
+        
+        <a href="/" style="text-decoration: none;">
+            <div class="logoIN"></div>
+        </a>
+
+        <div class="navbar-title">{% block navbar_title %}{% endblock %}</div>
+        
+        <div class="navbar-nav">
+            {% block navbar_buttons %}{% endblock %}
         </div>
-    </nav>
+    </div>
     
     <div class="container mt-4">
         {% if messages %}
@@ -234,7 +277,6 @@ urlpatterns = [
         {% block content %}
         {% endblock %}
     </div>
-
     <!--<footer class="footer">
         <div class="container text-center">
             <p class="mb-0">© 2025 ARPA</p>
@@ -249,21 +291,23 @@ urlpatterns = [
     # Create main template
     @"
 {% extends "master.html" %}
-
 {% block title %}A R P A{% endblock %}
 {% block navbar_title %}{% endblock %}
-
 {% block content %}
-    <div class="card">
-        <div class="card-body">
-            <div class="d-grid gap-3 mt-4">
-                <a href="persons/" class="btn btn-primary btn-lg">Personas</a>
-                <a href="bienesyRentas/" class="btn btn-primary btn-lg">Bienes y Rentas</a>
-                <a href="conflictos/" class="btn btn-primary btn-lg">Conflictos de Interes</a>
-                <a href="/admin/" class="btn btn-dark btn-lg">Admin ARPA</a>
-            </div>
-        </div>
-    </div>
+ <div class="card">
+ <div class="card-body">
+ <div class="d-flex flex-column gap-3 mt-4">
+ <a href="persons/" class="btn btn-outline-primary btn-lg text-start"><i class="fas fa-users me-2"></i>Personas</a>
+ <a href="bienesyRentas/" class="btn btn-outline-primary btn-lg text-start"><i class="fas fa-building me-2"></i>Bienes y Rentas</a>
+ <a href="conflictos/" class="btn btn-outline-primary btn-lg text-start"><i class="fas fa-balance-scale me-2"></i>Conflictos de Interes</a>
+ <a href="alertas/" class="btn btn-outline-danger btn-lg text-start"><i class="fas fa-exclamation-triangle me-2"></i>Alertas</a>
+ <a href="/admin/" class="btn btn-outline-dark btn-lg text-start"><i class="fas fa-cog me-2"></i>Admin ARPA</a>
+ </div>
+ </div>
+ </div>
+
+<!-- Font Awesome CDN link -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
 {% endblock %}
 "@ | Out-File -FilePath "persons/templates/main.html" -Encoding utf8
 
