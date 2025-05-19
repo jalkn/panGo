@@ -60,6 +60,10 @@ def persons(request):
     # Get filter parameters from request
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status', '')
+    nombre_filter = request.GET.get('nombre', '')
+    cargo_filter = request.GET.get('cargo', '')
+    compania_filter = request.GET.get('compania', '')
+    order_by = request.GET.get('order_by', 'nombre_completo')
     
     # Apply filters if they exist
     if search_query:
@@ -71,6 +75,19 @@ def persons(request):
     
     if status_filter:
         persons = persons.filter(estado=status_filter)
+        
+    if nombre_filter:
+        persons = persons.filter(nombre_completo__icontains=nombre_filter)
+        
+    if cargo_filter:
+        persons = persons.filter(cargo__icontains=cargo_filter)
+        
+    if compania_filter:
+        persons = persons.filter(compania__icontains=compania_filter)
+    
+    # Apply ordering
+    if order_by in ['cedula', 'nombre_completo', 'cargo', 'compania']:
+        persons = persons.order_by(order_by)
     
     context = {
         'persons': persons,
@@ -83,11 +100,15 @@ def details(request, cedula):
   
 def main(request):
     # Get all persons with filters and pagination
-    persons = Person.objects.all().order_by('nombre_completo')
+    persons = Person.objects.all()
     
     # Get filter parameters from request
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status', '')
+    nombre_filter = request.GET.get('nombre', '')
+    cargo_filter = request.GET.get('cargo', '')
+    compania_filter = request.GET.get('compania', '')
+    order_by = request.GET.get('order_by', 'nombre_completo')
     
     # Apply filters if they exist
     if search_query:
@@ -99,6 +120,23 @@ def main(request):
     
     if status_filter:
         persons = persons.filter(estado=status_filter)
+        
+    if nombre_filter:
+        persons = persons.filter(nombre_completo__icontains=nombre_filter)
+        
+    if cargo_filter:
+        persons = persons.filter(cargo__icontains=cargo_filter)
+        
+    if compania_filter:
+        persons = persons.filter(compania__icontains=compania_filter)
+    
+    # Apply ordering
+    if order_by in ['cedula', 'nombre_completo', 'cargo', 'compania']:
+        persons = persons.order_by(order_by)
+    
+    # Get unique values for dropdown filters
+    cargos = Person.objects.values_list('cargo', flat=True).distinct().order_by('cargo')
+    companias = Person.objects.values_list('compania', flat=True).distinct().order_by('compania')
     
     # Pagination
     paginator = Paginator(persons, 1000) 
@@ -107,8 +145,11 @@ def main(request):
     
     return render(request, 'main.html', {
         'page_obj': page_obj,
-        'persons': page_obj.object_list,  # Pass both paginated and full list
-        'persons_count': persons.count()
+        'persons': page_obj.object_list,
+        'persons_count': persons.count(),
+        'cargos': cargos,
+        'companias': companias,
+        'current_order': order_by,
     })
 
 def import_from_excel(request):
@@ -405,13 +446,16 @@ urlpatterns = [
 <div class="card mb-4 border-0 shadow">
     <div class="card-body">
         <form method="get" action="." class="row g-3 align-items-center">
-            <div class="col-md-8">
+            <!-- General Search -->
+            <div class="col-md-4">
                 <input type="text" 
                        name="q" 
                        class="form-control form-control-lg" 
-                       placeholder="Filtrar por nombre, ID, compania..." 
+                       placeholder="Buscar..." 
                        value="{{ request.GET.q }}">
             </div>
+            
+            <!-- Status Filter -->
             <div class="col-md-2">
                 <select name="status" class="form-select form-select-lg">
                     <option value="">Estado</option>
@@ -419,9 +463,30 @@ urlpatterns = [
                     <option value="Retirado" {% if request.GET.status == 'Retirado' %}selected{% endif %}>Retirado</option>
                 </select>
             </div>
+            
+            <!-- Cargo Filter -->
             <div class="col-md-2">
-                <button type="submit" class="btn btn-custom-primary btn-lg w-100">Buscar
-                </button>
+                <select name="cargo" class="form-select form-select-lg">
+                    <option value="">Cargo</option>
+                    {% for cargo in cargos %}
+                        <option value="{{ cargo }}" {% if request.GET.cargo == cargo %}selected{% endif %}>{{ cargo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Compania Filter -->
+            <div class="col-md-2">
+                <select name="compania" class="form-select form-select-lg">
+                    <option value="">Compania</option>
+                    {% for compania in companias %}
+                        <option value="{{ compania }}" {% if request.GET.compania == compania %}selected{% endif %}>{{ compania }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Submit Button -->
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-custom-primary btn-lg w-100">Filtrar</button>
             </div>
         </form>
     </div>
@@ -434,11 +499,11 @@ urlpatterns = [
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
-                        <th>ID</th>
-                        <th>Nombre</th>
-                        <th>Cargo</th>
+                        <th><a href="?order_by=cedula{% for key, value in request.GET.items %}{% if key != 'order_by' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">ID {% if current_order == 'cedula' %}<i class="fas fa-sort-up"></i>{% endif %}</a></th>
+                        <th><a href="?order_by=nombre_completo{% for key, value in request.GET.items %}{% if key != 'order_by' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Nombre {% if current_order == 'nombre_completo' %}<i class="fas fa-sort-up"></i>{% endif %}</a></th>
+                        <th><a href="?order_by=cargo{% for key, value in request.GET.items %}{% if key != 'order_by' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Cargo {% if current_order == 'cargo' %}<i class="fas fa-sort-up"></i>{% endif %}</a></th>
                         <th>Correo</th>
-                        <th>Compania</th>
+                        <th><a href="?order_by=compania{% for key, value in request.GET.items %}{% if key != 'order_by' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Compania {% if current_order == 'compania' %}<i class="fas fa-sort-up"></i>{% endif %}</a></th>
                         <th>Estado</th>
                         <th>Ver</th>
                     </tr>
@@ -467,8 +532,8 @@ urlpatterns = [
                     {% empty %}
                         <tr>
                             <td colspan="7" class="text-center py-4">
-                                {% if request.GET.q or request.GET.status %}
-                                    Sin registros que coincidan con la búsqueda.
+                                {% if request.GET.q or request.GET.status or request.GET.cargo or request.GET.compania %}
+                                    Sin registros que coincidan con los filtros.
                                 {% else %}
                                     Sin registros
                                 {% endif %}
@@ -478,6 +543,49 @@ urlpatterns = [
                 </tbody>
             </table>
         </div>
+        
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="p-3">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
