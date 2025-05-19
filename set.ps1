@@ -57,91 +57,101 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
 def persons(request):
-    persons = Person.objects.all().order_by('nombre_completo')
+    persons = Person.objects.all()
     
-    # Get filter parameters from request
+    # Get filter and sorting parameters from request
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status', '')
     nombre_filter = request.GET.get('nombre', '')
     cargo_filter = request.GET.get('cargo', '')
     compania_filter = request.GET.get('compania', '')
+    correo_filter = request.GET.get('correo', '')
     order_by = request.GET.get('order_by', 'nombre_completo')
+    sort_direction = request.GET.get('sort_direction', 'asc')
     
-    # Apply filters if they exist
+    # Apply filters
     if search_query:
         persons = persons.filter(
             Q(nombre_completo__icontains=search_query) |
             Q(cedula__icontains=search_query) |
             Q(compania__icontains=search_query) |
-            Q(cargo__icontains=search_query))
+            Q(cargo__icontains=search_query) |
+            Q(correo__icontains=search_query))
     
     if status_filter:
         persons = persons.filter(estado=status_filter)
-        
     if nombre_filter:
         persons = persons.filter(nombre_completo__icontains=nombre_filter)
-        
     if cargo_filter:
         persons = persons.filter(cargo__icontains=cargo_filter)
-        
     if compania_filter:
         persons = persons.filter(compania__icontains=compania_filter)
+    if correo_filter:
+        persons = persons.filter(correo__icontains=correo_filter)
     
-    # Apply ordering
-    if order_by in ['cedula', 'nombre_completo', 'cargo', 'compania']:
+    # Apply sorting with direction
+    if order_by in ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado']:
+        if sort_direction == 'desc':
+            order_by = f'-{order_by}'
         persons = persons.order_by(order_by)
     
     context = {
         'persons': persons,
+        'current_order': order_by.replace('-', ''),
+        'current_direction': sort_direction,
     }
     return render(request, 'main.html', context)
 
 def details(request, cedula):
     myperson = Person.objects.get(cedula=cedula)
     return render(request, 'details.html', {'myperson': myperson})
-  
+
 def main(request):
-    # Get all persons with filters and pagination
     persons = Person.objects.all()
     
-    # Get filter parameters from request
+    # Get filter and sorting parameters
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status', '')
     nombre_filter = request.GET.get('nombre', '')
     cargo_filter = request.GET.get('cargo', '')
     compania_filter = request.GET.get('compania', '')
+    correo_filter = request.GET.get('correo', '')
     order_by = request.GET.get('order_by', 'nombre_completo')
+    sort_direction = request.GET.get('sort_direction', 'asc')
     
-    # Apply filters if they exist
+    # Apply filters
     if search_query:
         persons = persons.filter(
             Q(nombre_completo__icontains=search_query) |
             Q(cedula__icontains=search_query) |
             Q(compania__icontains=search_query) |
-            Q(cargo__icontains=search_query))
+            Q(cargo__icontains=search_query) |
+            Q(correo__icontains=search_query))
     
     if status_filter:
         persons = persons.filter(estado=status_filter)
-        
     if nombre_filter:
         persons = persons.filter(nombre_completo__icontains=nombre_filter)
-        
     if cargo_filter:
         persons = persons.filter(cargo__icontains=cargo_filter)
-        
     if compania_filter:
         persons = persons.filter(compania__icontains=compania_filter)
+    if correo_filter:
+        persons = persons.filter(correo__icontains=correo_filter)
     
-    # Apply ordering
-    if order_by in ['cedula', 'nombre_completo', 'cargo', 'compania']:
+    # Apply sorting with direction
+    if order_by in ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado']:
+        if sort_direction == 'desc':
+            order_by = f'-{order_by}'
         persons = persons.order_by(order_by)
     
-    # Get unique values for dropdown filters
+    # Get unique values for dropdowns
     cargos = Person.objects.values_list('cargo', flat=True).distinct().order_by('cargo')
     companias = Person.objects.values_list('compania', flat=True).distinct().order_by('compania')
+    estados = Person.objects.values_list('estado', flat=True).distinct().order_by('estado')
     
     # Pagination
-    paginator = Paginator(persons, 1000) 
+    paginator = Paginator(persons, 1000)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
@@ -151,7 +161,10 @@ def main(request):
         'persons_count': persons.count(),
         'cargos': cargos,
         'companias': companias,
-        'current_order': order_by,
+        'estados': estados,
+        'current_order': order_by.replace('-', ''),
+        'current_direction': sort_direction,
+        'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
     })
 
 def import_from_excel(request):
@@ -160,7 +173,6 @@ def import_from_excel(request):
         try:
             df = pd.read_excel(excel_file)
             
-            # Convert column names to match your model
             column_mapping = {
                 'Cedula': 'cedula',
                 'NOMBRE COMPLETO': 'nombre_completo',
@@ -170,11 +182,8 @@ def import_from_excel(request):
                 'Estado': 'estado'
             }
             df.rename(columns=column_mapping, inplace=True)
-            
-            # Handle missing or null values
             df.fillna('', inplace=True)
             
-            # Process each row
             for _, row in df.iterrows():
                 Person.objects.update_or_create(
                     cedula=row['cedula'],
@@ -196,51 +205,52 @@ def import_from_excel(request):
     return render(request, 'import_excel.html')
 
 def export_to_excel(request):
-    # Get filtered queryset using the same filters as the main view
     persons = Person.objects.all()
     
-    # Apply the same filters as in the main view
+    # Apply filters
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status', '')
     nombre_filter = request.GET.get('nombre', '')
     cargo_filter = request.GET.get('cargo', '')
     compania_filter = request.GET.get('compania', '')
+    correo_filter = request.GET.get('correo', '')
     order_by = request.GET.get('order_by', 'nombre_completo')
+    sort_direction = request.GET.get('sort_direction', 'asc')
     
     if search_query:
         persons = persons.filter(
             Q(nombre_completo__icontains=search_query) |
             Q(cedula__icontains=search_query) |
             Q(compania__icontains=search_query) |
-            Q(cargo__icontains=search_query))
+            Q(cargo__icontains=search_query) |
+            Q(correo__icontains=search_query))
     
     if status_filter:
         persons = persons.filter(estado=status_filter)
-        
     if nombre_filter:
         persons = persons.filter(nombre_completo__icontains=nombre_filter)
-        
     if cargo_filter:
         persons = persons.filter(cargo__icontains=cargo_filter)
-        
     if compania_filter:
         persons = persons.filter(compania__icontains=compania_filter)
+    if correo_filter:
+        persons = persons.filter(correo__icontains=correo_filter)
     
-    if order_by in ['cedula', 'nombre_completo', 'cargo', 'compania']:
+    # Apply sorting
+    if order_by in ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado']:
+        if sort_direction == 'desc':
+            order_by = f'-{order_by}'
         persons = persons.order_by(order_by)
 
-    # Create a workbook and add a worksheet
     wb = Workbook()
     ws = wb.active
     ws.title = "Personas"
 
-    # Add headers
     headers = ["Cedula", "Nombre Completo", "Cargo", "Correo", "Compania", "Estado"]
     for col_num, header in enumerate(headers, 1):
         col_letter = get_column_letter(col_num)
         ws[f"{col_letter}1"] = header
 
-    # Add data
     for row_num, person in enumerate(persons, 2):
         ws[f"A{row_num}"] = person.cedula
         ws[f"B{row_num}"] = person.nombre_completo
@@ -249,11 +259,8 @@ def export_to_excel(request):
         ws[f"E{row_num}"] = person.compania
         ws[f"F{row_num}"] = person.estado
 
-    # Prepare response
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename=personas.xlsx'
-    
-    # Save workbook to response
     wb.save(response)
     return response
 "@ | Out-File -FilePath "core/views.py" -Encoding utf8
@@ -659,17 +666,41 @@ body {
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-striped table-hover mb-0">
-                <thead class="table-dark">
-                    <tr>
-                        <th><a href="?order_by=cedula{% for key, value in request.GET.items %}{% if key != 'order_by' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">ID {% if current_order == 'cedula' %}<i class="fas fa-sort-up"></i>{% endif %}</a></th>
-                        <th><a href="?order_by=nombre_completo{% for key, value in request.GET.items %}{% if key != 'order_by' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Nombre {% if current_order == 'nombre_completo' %}<i class="fas fa-sort-up"></i>{% endif %}</a></th>
-                        <th><a href="?order_by=cargo{% for key, value in request.GET.items %}{% if key != 'order_by' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Cargo {% if current_order == 'cargo' %}<i class="fas fa-sort-up"></i>{% endif %}</a></th>
-                        <th>Correo</th>
-                        <th><a href="?order_by=compania{% for key, value in request.GET.items %}{% if key != 'order_by' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Compania {% if current_order == 'compania' %}<i class="fas fa-sort-up"></i>{% endif %}</a></th>
-                        <th>Estado</th>
-                        <th>Ver</th>
-                    </tr>
-                </thead>
+                    <thead class="table-dark">
+                        <tr>
+                            <th>
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cedula&sort_direction={% if current_order == 'cedula' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                    ID
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=nombre_completo&sort_direction={% if current_order == 'nombre_completo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                    Nombre
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cargo&sort_direction={% if current_order == 'cargo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                    Cargo
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=correo&sort_direction={% if current_order == 'correo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                    Correo
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=compania&sort_direction={% if current_order == 'compania' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                    Compania
+                                </a>
+                            </th>
+                            <th>
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=estado&sort_direction={% if current_order == 'estado' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                    Estado
+                                </a>
+                            </th>
+                            <th>Ver</th>
+                        </tr>
+                    </thead>
                 <tbody>
                     {% for person in persons %}
                         <tr>
