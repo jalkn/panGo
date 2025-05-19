@@ -15,8 +15,8 @@ function migratoDjango {
     django-admin startproject arpa
     cd arpa
 
-    # Create persons app
-    python manage.py startapp persons
+    # Create core app (changed from persons)
+    python manage.py startapp core
 
     # Create models.py with cedula as primary key
     @"
@@ -41,7 +41,7 @@ class Person(models.Model):
     class Meta:
         verbose_name = "Persona"
         verbose_name_plural = "Personas"
-"@ | Out-File -FilePath "persons/models.py" -Encoding utf8
+"@ | Out-File -FilePath "core/models.py" -Encoding utf8
 
     # Create views.py with import functionality
     @"
@@ -51,22 +51,49 @@ from django.shortcuts import render
 from .models import Person
 import pandas as pd
 from django.contrib import messages
+from django.core.paginator import Paginator
+from django.db.models import Q
 
 def persons(request):
-    mypersons = Person.objects.all()
-    template = loader.get_template('persons.html')
-    context = {'mypersons': mypersons}
-    return HttpResponse(template.render(context, request))
-  
+    persons = Person.objects.all().order_by('nombre_completo')
+    
+    # Get filter parameters from request
+    search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+    
+    # Apply filters if they exist
+    if search_query:
+        persons = persons.filter(
+            Q(nombre_completo__icontains=search_query) |
+            Q(cedula__icontains=search_query) |
+            Q(compania__icontains=search_query) |
+            Q(cargo__icontains=search_query)
+        )
+    
+    if status_filter:
+        persons = persons.filter(estado=status_filter)
+    
+    context = {
+        'persons': persons,
+    }
+    return render(request, 'main.html', context)
+
 def details(request, cedula):
     myperson = Person.objects.get(cedula=cedula)
-    template = loader.get_template('details.html')
-    context = {'myperson': myperson}
-    return HttpResponse(template.render(context, request))
+    return render(request, 'details.html', {'myperson': myperson})
   
 def main(request):
-    template = loader.get_template('main.html')
-    return HttpResponse(template.render())
+    # Get all persons with pagination
+    person_list = Person.objects.all().order_by('nombre_completo')
+    paginator = Paginator(person_list, 25)  # Show 25 persons per page
+    
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'main.html', {
+        'page_obj': page_obj,
+        'persons_count': person_list.count()
+    })
 
 def import_from_excel(request):
     if request.method == 'POST' and request.FILES.get('excel_file'):
@@ -86,27 +113,26 @@ def import_from_excel(request):
                     }
                 )
             
-            messages.success(request, f'Successfully imported/updated {len(df)} records!')
+            messages.success(request, f'Carga exitosa/{len(df)} filas!')
         except Exception as e:
             messages.error(request, f'Error importing data: {str(e)}')
         
-        return HttpResponseRedirect('/persons/')
+        return HttpResponseRedirect('/')
     
     return render(request, 'import_excel.html')
-"@ | Out-File -FilePath "persons/views.py" -Encoding utf8
+"@ | Out-File -FilePath "core/views.py" -Encoding utf8
 
-    # Create urls.py for persons app
+    # Create urls.py for core app
     @"
 from django.urls import path
 from . import views
 
 urlpatterns = [
     path('', views.main, name='main'),
-    path('persons/', views.persons, name='persons'),
-    path('persons/details/<str:cedula>', views.details, name='details'),
+    path('persons/details/<str:cedula>/', views.details, name='details'),
     path('persons/import/', views.import_from_excel, name='import_excel'),
 ]
-"@ | Out-File -FilePath "persons/urls.py" -Encoding utf8
+"@ | Out-File -FilePath "core/urls.py" -Encoding utf8
 
     # Create admin.py with enhanced configuration
     @"
@@ -140,7 +166,7 @@ class PersonAdmin(admin.ModelAdmin):
     )
     
 admin.site.register(Person, PersonAdmin)
-"@ | Out-File -FilePath "persons/admin.py" -Encoding utf8
+"@ | Out-File -FilePath "core/admin.py" -Encoding utf8
 
     # Update project urls.py with proper admin configuration
     @"
@@ -153,17 +179,17 @@ admin.site.site_title = 'ARPA Admin Portal'
 admin.site.index_title = 'Welcome to ARPA Administration'
 
 urlpatterns = [
-    path('persons/', include('persons.urls')),
+    path('persons/', include('core.urls')),
     path('admin/', admin.site.urls),
-    path('', include('persons.urls')), 
+    path('', include('core.urls')), 
 ]
 "@ | Out-File -FilePath "arpa/urls.py" -Encoding utf8
 
     # Create templates directory structure
     $directories = @(
-        "persons/templates",
-        "persons/templates/admin",
-        "persons/templates/admin/persons"
+        "core/templates",
+        "core/templates/admin",
+        "core/templates/admin/core"
     )
     foreach ($dir in $directories) {
         New-Item -Path $dir -ItemType Directory -Force
@@ -180,122 +206,135 @@ urlpatterns = [
 {% endblock %}
 
 {% block nav-global %}{% endblock %}
-"@ | Out-File -FilePath "persons/templates/admin/base_site.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/admin/base_site.html" -Encoding utf8
 
     # Create master template
     @"
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{% block title %}{% endblock %}</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <title>{% block title %}ARPA{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #0b00a2;
+            --primary-hover: #090086;
+            --text-on-primary: white;
+        }
+        
         body {
             margin: 0;
-            background-color: white;
+            padding: 20px;
+            background-color: #f8f9fa;
         }
-        .footer {
-            background-color: #343a40;
-            color: white;
-            padding: 20px 0;
-            margin-top: 40px;
-        }
-        .navbar-title {
-            color: black;
-            margin-right: auto;
-            padding-left: 15px;
-            font-size: 1.25rem;
-            cursor: pointer;
-        }
+        
         .topnav-container {
             display: flex;
             align-items: center;
-            padding-right: 40px;
-            padding-left: 40px;
+            padding: 0 40px;
+            margin-bottom: 20px;
+            gap: 15px;
         }
+        
         .logoIN {
-            cursor: pointer;
             width: 40px;
             height: 40px;
-            background-color: #0b00a2;
+            background-color: var(--primary-color);
             border-radius: 8px;
-            display: inline-flex;
             position: relative;
+            flex-shrink: 0;
         }
         
         .logoIN::before {
             content: "";
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
             position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
             top: 30%;
             left: 70%;
             transform: translate(-50%, -50%);
             background-image: linear-gradient(to right, 
-                #ffffff 2px, transparent 1.5px,
-                transparent 1.5px, #ffffff 1.5px,
-                #ffffff 2px, transparent 1.5px);
-            background-size: 4px 100%; 
+                #ffffff 2px, transparent 2px);
+            background-size: 4px 100%;
         }
         
-        .nomPag {
-            margin-left: 10px;
-            color: #0b00a2;
+        .navbar-title {
+            color: var(--primary-color);
             font-weight: bold;
-            font-size: 1.2rem;
-        }
-
-        .full-width-container {
-            width: 100%;
-            padding-right: 10px;
-            padding-left: 10px;
+            font-size: 1.25rem;
             margin-right: auto;
-            margin-left: auto;
         }
         
-        .card-full-width {
-            width: 100%;
-            margin-bottom: 20px;
+        .navbar-buttons {
+            display: flex;
+            gap: 10px;
         }
         
-        .table-full-width {
-            width: 100% !important;
-        }
-
-
         .btn-custom-primary {
-            background-color: #ffffff;
-            border-color: #0b00a2;
-            color: #090086;
+            background-color: white;
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            padding: 0.5rem 1rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 40px;
         }
         
         .btn-custom-primary:hover,
         .btn-custom-primary:focus {
-            background-color: #090086;
-            border-color: #090086;
-            color: white;
+            background-color: var(--primary-hover);
+            border-color: var(--primary-hover);
+            color: var(--text-on-primary);
         }
-</style>
+        
+        .btn-custom-primary i,
+        .btn-outline-dark i {
+            margin-right: 0;
+            font-size: 1rem;
+            line-height: 1;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        
+        .main-container {
+            padding: 0 40px;
+        }
+        
+        /* Search filter styles */
+        .search-filter {
+            margin-bottom: 20px;
+            max-width: 400px;
+        }
+        
+        /* Table row hover effect */
+        .table-hover tbody tr:hover {
+            background-color: rgba(11, 0, 162, 0.05);
+        }
     </style>
 </head>
 <body>
     <div class="topnav-container">
-        
         <a href="/" style="text-decoration: none;">
             <div class="logoIN"></div>
         </a>
-
-        <div class="navbar-title">{% block navbar_title %}{% endblock %}</div>
-        
-        <div class="navbar-nav">
-            {% block navbar_buttons %}{% endblock %}
+        <div class="navbar-title">{% block navbar_title %}ARPA{% endblock %}</div>
+        <div class="navbar-buttons">
+            {% block navbar_buttons %}
+            <a href="/admin/" class="btn btn-outline-dark" title="Admin">
+                <i class="fas fa-wrench"></i>
+            </a>
+            <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
+                <i class="fas fa-database"></i>
+            </a>
+            {% endblock %}
         </div>
     </div>
     
-    <div class="container-fluid mt-4 px-4">
+    <div class="main-container">
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
@@ -308,73 +347,73 @@ urlpatterns = [
         {% block content %}
         {% endblock %}
     </div>
-    <!--<footer class="footer">
-        <div class="container text-center">
-            <p class="mb-0">Â© 2025 ARPA</p>
-        </div>
-    </footer>-->
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-"@ | Out-File -FilePath "persons/templates/master.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/master.html" -Encoding utf8
 
     # Create main template
     @"
 {% extends "master.html" %}
+
 {% block title %}A R P A{% endblock %}
-{% block navbar_title %}Dashboard{% endblock %}
+{% block navbar_title %}A R P A{% endblock %}
 
 {% block navbar_buttons %}
-    <a href="/admin/" class="btn btn-outline-dark btn-lg text-start"><i class="fas fa-cog me-2"></i>Admin</a>
+<a href="/admin/" class="btn btn-outline-dark btn-lg text-start" title="Admin Panel">
+    <i class="fas fa-wrench"></i>
+</a>
+<a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
+    <i class="fas fa-database"></i>
+</a>
 {% endblock %}
 
 {% block content %}
- 
+<!-- Search Form -->
+<div class="card mb-4 border-0 shadow">
     <div class="card-body">
-        <div class="d-flex flex-column gap-3 mt-4">
-            <a href="persons/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-users me-2"></i>Personas</a>
-            <a href="bienesyRentas/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-building me-2"></i>Bienes y Rentas</a>
-            <a href="conflictos/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-balance-scale me-2"></i>Conflictos de Interes</a>
-            <a href="alertas/" class="btn btn-outline-danger btn-lg text-start"><i class="fas fa-exclamation-triangle me-2"></i>Alertas</a>
-        </div>
+        <form method="get" action="." class="row g-3 align-items-center">
+            <div class="col-md-8">
+                <input type="text" 
+                       name="q" 
+                       class="form-control form-control-lg" 
+                       placeholder="Filtrar por nombre, ID, compania..." 
+                       value="{{ request.GET.q }}">
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-lg">
+                    <option value="">Estado</option>
+                    <option value="Activo" {% if request.GET.status == 'Activo' %}selected{% endif %}>Activo</option>
+                    <option value="Retirado" {% if request.GET.status == 'Retirado' %}selected{% endif %}>Retirado</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-custom-primary btn-lg w-100">Buscar
+                </button>
+            </div>
+        </form>
     </div>
+</div>
 
-
-<!-- Font Awesome CDN link -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
-{% endblock %}
-"@ | Out-File -FilePath "persons/templates/main.html" -Encoding utf8
-
-    # Create all persons template
-    @"
-{% extends "master.html" %}
-
-{% block title %}Personas{% endblock %}
-{% block navbar_title %}Personas{% endblock %}
-
-{% block navbar_buttons %}
-    <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-database"></i></a>
-{% endblock %}
-
-{% block content %}
-<div class="card border-0 shadow">  <!-- Added border-0 shadow for better appearance -->
-    <div class="card-body p-0">  <!-- Added p-0 to remove inner padding -->
+<!-- Persons Table -->
+<div class="card border-0 shadow">
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-striped table-hover mb-0">  <!-- Added mb-0 -->
+            <table class="table table-striped table-hover mb-0">
                 <thead class="table-dark">
                     <tr>
                         <th>ID</th>
-                        <th>Nombre Completo</th>
+                        <th>Nombre</th>
                         <th>Cargo</th>
                         <th>Correo</th>
                         <th>Compania</th>
                         <th>Estado</th>
-                        <th>Acciones</th>
+                        <th>Ver</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for person in mypersons %}
+                    {% for person in persons %}
                         <tr>
                             <td>{{ person.cedula }}</td>
                             <td>{{ person.nombre_completo }}</td>
@@ -387,7 +426,21 @@ urlpatterns = [
                                 </span>
                             </td>
                             <td>
-                                <a href="details/{{ person.cedula }}" class="btn btn-custom-primary btn-lg text-start"><i class="bi bi-person-vcard-fill"></i></a>
+                                <a href="/persons/details/{{ person.cedula }}/" 
+                                   class="btn btn-custom-primary btn-sm"
+                                   title="View details">
+                                    <i class="bi bi-person-vcard-fill"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                {% if request.GET.q or request.GET.status %}
+                                    Sin registros que coincidan con la búsqueda.
+                                {% else %}
+                                    Sin registros
+                                {% endif %}
                             </td>
                         </tr>
                     {% endfor %}
@@ -397,7 +450,7 @@ urlpatterns = [
     </div>
 </div>
 {% endblock %}
-"@ | Out-File -FilePath "persons/templates/persons.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/main.html" -Encoding utf8
 
     # Create import template
     @"
@@ -412,16 +465,16 @@ urlpatterns = [
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="mb-3">
-                    <input type="file" class="form-control" id="excel_file" name="excel_file" required>
+                    <input type="file" class="form-control" id="excel_file" name="excel_file" required title="Seleccionar archivo">
                     <div class="form-text">El archivo Excel debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
                 </div>
                 <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar</button>
-                <a href="/persons/persons/" class="btn btn-custom-primary btn-lg text-start">Cancelar</a>
+                <a href="/" class="btn btn-custom-primary btn-lg text-start">Cancelar</a>
             </form>
         </div>
     </div>
 {% endblock %}
-"@ | Out-File -FilePath "persons/templates/import_excel.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/import_excel.html" -Encoding utf8
 
     # Create details template
     @"
@@ -429,6 +482,15 @@ urlpatterns = [
 
 {% block title %}Detalles - {{ myperson.nombre_completo }}{% endblock %}
 {% block navbar_title %}{{ myperson.nombre_completo }}{% endblock %}
+
+{% block navbar_buttons %}
+<!--<a href="/admin/" class="btn btn-outline-dark btn-lg text-start"><i class="fas fa-wrench me-2"></i></a>-->
+<a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-database"></i></a>
+    <!--<a href="/persons/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-users me-2"></i></a>
+    <a href="bienesyRentas/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-building me-2"></i></a>
+    <a href="conflictos/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-balance-scale me-2"></i></a>
+    <a href="alertas/" class="btn btn-outline-danger btn-lg text-start"><i class="fas fa-exclamation-triangle me-2"></i></a>-->
+{% endblock %}
 
 {% block content %}
     <div class="card">
@@ -465,18 +527,20 @@ urlpatterns = [
             </table>
             
             <div class="mt-3">
-                <a href="/persons/persons/" class="btn btn-custom-primary btn-lg text-start">Regresar</a>
-                <a href="/admin/persons/person/{{ myperson.cedula }}/change/" class="btn btn-custom-primary btn-lg text-start">Editar</a>
+                <!--<a href="/" class="btn btn-custom-primary btn-lg text-start">Regresar</a>-->
+                <a href="/admin/core/person/{{ myperson.cedula }}/change/" class="btn btn-custom-primary btn-lg text-start">
+                    <i class="fas fa-pencil-alt me-2"></i>
+                </a>
             </div>
         </div>
     </div>
 {% endblock %}
-"@ | Out-File -FilePath "persons/templates/details.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/details.html" -Encoding utf8
 
     # Update settings.py
     $settingsContent = Get-Content -Path ".\arpa\settings.py" -Raw
     $settingsContent = $settingsContent -replace "INSTALLED_APPS = \[", "INSTALLED_APPS = [
-    'persons.apps.PersonsConfig',"
+    'core.apps.CoreConfig',"
     $settingsContent = $settingsContent -replace "from pathlib import Path", "from pathlib import Path
 import os"
     $settingsContent | Set-Content -Path ".\arpa\settings.py"
@@ -498,7 +562,7 @@ ADMIN_INDEX_TITLE = "Welcome to ARPA Administration"
 "@
 
     # Run migrations
-    python manage.py makemigrations persons
+    python manage.py makemigrations core
     python manage.py migrate
 
     # Create superuser
@@ -517,7 +581,7 @@ import pandas as pd
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'arpa.settings')
 django.setup()
 
-from persons.models import Person
+from core.models import Person
 
 df = pd.read_excel(r'$ExcelFilePath')
 for _, row in df.iterrows():
