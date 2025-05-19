@@ -451,6 +451,35 @@ urlpatterns = [
         .table-hover tbody tr:hover {
             background-color: rgba(11, 0, 162, 0.05);
         }
+        .btn-my-green {
+        background-color: white;
+        border-color: green; /*  Important for a solid look */
+        color: green;      /* Usually a good contrast with green */
+        }
+
+        .btn-my-green:hover {
+        background-color: darkgreen; /* Darker shade on hover */
+        border-color: darkgreen;
+        color: white;
+        }
+
+        .btn-my-green:focus,
+        .btn-my-green.focus {
+        box-shadow: 0 0 0 0.2rem rgba(0, 128, 0, 0.5); /* Green focus ring */
+        }
+
+        .btn-my-green:active,
+        .btn-my-green.active {
+        background-color: darkgreen !important; /* Ensure active state is consistent */
+        border-color: darkgreen !important;
+        }
+
+        .btn-my-green:disabled,
+        .btn-my-green.disabled {
+        background-color: lightgreen; /* A muted color for disabled state */
+        border-color: lightgreen;
+        color: #6c757d; /* A muted text color */
+        }
     </style>
 </head>
 <body>
@@ -468,7 +497,7 @@ urlpatterns = [
                 <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
                     <i class="fas fa-database"></i>
                 </a>
-                <a href="/persons/export/?{{ request.GET.urlencode }}" class="btn btn-custom-primary" title="Exportar a Excel">
+                <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">  
                     <i class="fas fa-file-excel"></i>
                 </a>
                 {% endblock %}
@@ -508,7 +537,7 @@ urlpatterns = [
 <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
     <i class="fas fa-database"></i>
 </a>
-<a href="/persons/export/?{{ request.GET.urlencode }}" class="btn btn-custom-primary btn-lg text-start" title="Export to Excel">
+<a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">  
     <i class="fas fa-file-excel"></i>
 </a>
 {% endblock %}
@@ -671,6 +700,15 @@ urlpatterns = [
 {% block title %}Importar desde Excel{% endblock %}
 {% block navbar_title %}Importar Datos{% endblock %}
 
+{% block navbar_buttons %}
+<a href="/admin/" class="btn btn-outline-dark btn-lg text-start" title="Admin Panel">
+    <i class="fas fa-wrench"></i>
+</a>
+<a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
+    <i class="fas fa-database"></i>
+</a>
+{% endblock %}
+
 {% block content %}
     <div class="card">
         <div class="card-body">
@@ -696,15 +734,15 @@ urlpatterns = [
 {% block navbar_title %}{{ myperson.nombre_completo }}{% endblock %}
 
 {% block navbar_buttons %}
-    <a href="/admin/" class="btn btn-outline-dark" title="Admin">
-        <i class="fas fa-wrench"></i>
-    </a>
-    <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
-        <i class="fas fa-database"></i>
-    </a>
-    <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary" title="Exportar a Excel">
-        <i class="fas fa-file-excel"></i>
-    </a>
+<a href="/admin/" class="btn btn-outline-dark" title="Admin">
+    <i class="fas fa-wrench"></i>
+</a>
+<a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
+    <i class="fas fa-database"></i>
+</a>
+<a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">  
+    <i class="fas fa-file-excel"></i>
+</a>
 {% endblock %}
 
 {% block content %}
