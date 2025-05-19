@@ -246,9 +246,9 @@ from django.contrib import admin
 from django.urls import include, path
 
 # Customize default admin interface
-admin.site.site_header = 'ARPA Administration'
+admin.site.site_header = 'A R P A'
 admin.site.site_title = 'ARPA Admin Portal'
-admin.site.index_title = 'Welcome to ARPA Administration'
+admin.site.index_title = 'Bienvenido a A R P A'
 
 urlpatterns = [
     path('persons/', include('core.urls')),
@@ -271,10 +271,10 @@ urlpatterns = [
     @"
 {% extends "admin/base.html" %}
 
-{% block title %}{{ title }} | {{ site_title|default:_('ARPA Administration') }}{% endblock %}
+{% block title %}{{ title }} | {{ site_title|default:_('A R P A') }}{% endblock %}
 
 {% block branding %}
-<h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('ARPA Administration') }}</a></h1>
+<h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('A R P A') }}</a></h1>
 {% endblock %}
 
 {% block nav-global %}{% endblock %}
@@ -484,9 +484,10 @@ urlpatterns = [
                 </select>
             </div>
             
-            <!-- Submit Button -->
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-custom-primary btn-lg w-100">Filtrar</button>
+            <!-- Submit Buttons -->
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-custom-primary btn-lg flex-grow-1">Filtrar</button>
+                <a href="." class="btn btn-outline-secondary btn-lg flex-grow-1">Limpiar</a>
             </div>
         </form>
     </div>
@@ -605,10 +606,10 @@ urlpatterns = [
                 {% csrf_token %}
                 <div class="mb-3">
                     <input type="file" class="form-control" id="excel_file" name="excel_file" required title="Seleccionar archivo">
-                    <div class="form-text">El archivo Excel debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
+                    <div class="form-text">El archivo Excel de Personas debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
                 </div>
-                <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar</button>
-                <a href="/" class="btn btn-custom-primary btn-lg text-start">Cancelar</a>
+                <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
+                <!--<a href="/" class="btn btn-custom-primary btn-lg text-start">Cancelar</a>-->
             </form>
         </div>
     </div>
@@ -695,9 +696,9 @@ MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Custom admin skin
-ADMIN_SITE_HEADER = "ARPA Administration"
+ADMIN_SITE_HEADER = "A R P A"
 ADMIN_SITE_TITLE = "ARPA Admin Portal"
-ADMIN_INDEX_TITLE = "Welcome to ARPA Administration"
+ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
 "@
 
     # Run migrations
