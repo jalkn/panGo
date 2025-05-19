@@ -67,8 +67,7 @@ def persons(request):
             Q(nombre_completo__icontains=search_query) |
             Q(cedula__icontains=search_query) |
             Q(compania__icontains=search_query) |
-            Q(cargo__icontains=search_query)
-        )
+            Q(cargo__icontains=search_query))
     
     if status_filter:
         persons = persons.filter(estado=status_filter)
@@ -83,16 +82,33 @@ def details(request, cedula):
     return render(request, 'details.html', {'myperson': myperson})
   
 def main(request):
-    # Get all persons with pagination
-    person_list = Person.objects.all().order_by('nombre_completo')
-    paginator = Paginator(person_list, 25)  # Show 25 persons per page
+    # Get all persons with filters and pagination
+    persons = Person.objects.all().order_by('nombre_completo')
     
+    # Get filter parameters from request
+    search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+    
+    # Apply filters if they exist
+    if search_query:
+        persons = persons.filter(
+            Q(nombre_completo__icontains=search_query) |
+            Q(cedula__icontains=search_query) |
+            Q(compania__icontains=search_query) |
+            Q(cargo__icontains=search_query))
+    
+    if status_filter:
+        persons = persons.filter(estado=status_filter)
+    
+    # Pagination
+    paginator = Paginator(persons, 1000) 
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
     return render(request, 'main.html', {
         'page_obj': page_obj,
-        'persons_count': person_list.count()
+        'persons': page_obj.object_list,  # Pass both paginated and full list
+        'persons_count': persons.count()
     })
 
 def import_from_excel(request):
@@ -101,19 +117,34 @@ def import_from_excel(request):
         try:
             df = pd.read_excel(excel_file)
             
+            # Convert column names to match your model
+            column_mapping = {
+                'Cedula': 'cedula',
+                'NOMBRE COMPLETO': 'nombre_completo',
+                'CARGO': 'cargo',
+                'Correo': 'correo',
+                'Compania': 'compania',
+                'Estado': 'estado'
+            }
+            df.rename(columns=column_mapping, inplace=True)
+            
+            # Handle missing or null values
+            df.fillna('', inplace=True)
+            
+            # Process each row
             for _, row in df.iterrows():
                 Person.objects.update_or_create(
-                    cedula=row['Cedula'],
+                    cedula=row['cedula'],
                     defaults={
-                        'nombre_completo': row['NOMBRE COMPLETO'],
-                        'cargo': row['CARGO'],
-                        'correo': row['Correo'],
-                        'compania': row['Compania'],
-                        'estado': row['Estado']
+                        'nombre_completo': row['nombre_completo'],
+                        'cargo': row['cargo'],
+                        'correo': row['correo'],
+                        'compania': row['compania'],
+                        'estado': row['estado'] if row['estado'] in ['Activo', 'Retirado'] else 'Activo'
                     }
                 )
             
-            messages.success(request, f'Carga exitosa/{len(df)} filas!')
+            messages.success(request, f'Carga exitosa! {len(df)} filas procesadas.')
         except Exception as e:
             messages.error(request, f'Error importing data: {str(e)}')
         
@@ -484,7 +515,7 @@ urlpatterns = [
 {% block navbar_title %}{{ myperson.nombre_completo }}{% endblock %}
 
 {% block navbar_buttons %}
-<!--<a href="/admin/" class="btn btn-outline-dark btn-lg text-start"><i class="fas fa-wrench me-2"></i></a>-->
+    <!--<a href="/admin/" class="btn btn-outline-dark btn-lg text-start"><i class="fas fa-wrench me-2"></i></a>-->
 <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-database"></i></a>
     <!--<a href="/persons/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-users me-2"></i></a>
     <a href="bienesyRentas/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-building me-2"></i></a>
