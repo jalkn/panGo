@@ -324,9 +324,11 @@ urlpatterns = [
 
     # Create templates directory structure
     $directories = @(
+        "core/static",
+        "core/static/core",
+        "core/static/core/css",
         "core/templates",
-        "core/templates/admin",
-        "core/templates/admin/core"
+        "core/templates/admin"
     )
     foreach ($dir in $directories) {
         New-Item -Path $dir -ItemType Directory -Force
@@ -354,133 +356,8 @@ urlpatterns = [
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #0b00a2;
-            --primary-hover: #090086;
-            --text-on-primary: white;
-        }
-        
-        body {
-            margin: 0;
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        
-        .topnav-container {
-            display: flex;
-            align-items: center;
-            padding: 0 40px;
-            margin-bottom: 20px;
-            gap: 15px;
-        }
-        
-        .logoIN {
-            width: 40px;
-            height: 40px;
-            background-color: var(--primary-color);
-            border-radius: 8px;
-            position: relative;
-            flex-shrink: 0;
-        }
-        
-        .logoIN::before {
-            content: "";
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            top: 30%;
-            left: 70%;
-            transform: translate(-50%, -50%);
-            background-image: linear-gradient(to right, 
-                #ffffff 2px, transparent 2px);
-            background-size: 4px 100%;
-        }
-        
-        .navbar-title {
-            color: var(--primary-color);
-            font-weight: bold;
-            font-size: 1.25rem;
-            margin-right: auto;
-        }
-        
-        .navbar-buttons {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .btn-custom-primary {
-            background-color: white;
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-            padding: 0.5rem 1rem;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 40px;
-        }
-        
-        .btn-custom-primary:hover,
-        .btn-custom-primary:focus {
-            background-color: var(--primary-hover);
-            border-color: var(--primary-hover);
-            color: var(--text-on-primary);
-        }
-        
-        .btn-custom-primary i,
-        .btn-outline-dark i {
-            margin-right: 0;
-            font-size: 1rem;
-            line-height: 1;
-            display: inline-block;
-            vertical-align: middle;
-        }
-        
-        .main-container {
-            padding: 0 40px;
-        }
-        
-        /* Search filter styles */
-        .search-filter {
-            margin-bottom: 20px;
-            max-width: 400px;
-        }
-        
-        /* Table row hover effect */
-        .table-hover tbody tr:hover {
-            background-color: rgba(11, 0, 162, 0.05);
-        }
-        .btn-my-green {
-        background-color: white;
-        border-color: green; /*  Important for a solid look */
-        color: green;      /* Usually a good contrast with green */
-        }
-
-        .btn-my-green:hover {
-        background-color: darkgreen; /* Darker shade on hover */
-        border-color: darkgreen;
-        color: white;
-        }
-
-        .btn-my-green:focus,
-        .btn-my-green.focus {
-        box-shadow: 0 0 0 0.2rem rgba(0, 128, 0, 0.5); /* Green focus ring */
-        }
-
-        .btn-my-green:active,
-        .btn-my-green.active {
-        background-color: darkgreen !important; /* Ensure active state is consistent */
-        border-color: darkgreen !important;
-        }
-
-        .btn-my-green:disabled,
-        .btn-my-green.disabled {
-        background-color: lightgreen; /* A muted color for disabled state */
-        border-color: lightgreen;
-        color: #6c757d; /* A muted text color */
-        }
-    </style>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'core/css/style.css' %}">
 </head>
 <body>
     <div class="topnav-container">
@@ -522,6 +399,189 @@ urlpatterns = [
 </body>
 </html>
 "@ | Out-File -FilePath "core/templates/master.html" -Encoding utf8
+
+#statics css style
+@" 
+:root {
+    --primary-color: #0b00a2;
+    --primary-hover: #090086;
+    --text-on-primary: white;
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+    background-color: #f8f9fa;
+}
+
+.topnav-container {
+    display: flex;
+    align-items: center;
+    padding: 0 40px;
+    margin-bottom: 20px;
+    gap: 15px;
+}
+
+.logoIN {
+    width: 40px;
+    height: 40px;
+    background-color: var(--primary-color);
+    border-radius: 8px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.logoIN::before {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    top: 30%;
+    left: 70%;
+    transform: translate(-50%, -50%);
+    background-image: linear-gradient(to right, 
+        #ffffff 2px, transparent 2px);
+    background-size: 4px 100%;
+}
+
+.navbar-title {
+    color: var(--primary-color);
+    font-weight: bold;
+    font-size: 1.25rem;
+    margin-right: auto;
+}
+
+.navbar-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-custom-primary {
+    background-color: white;
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    padding: 0.5rem 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+}
+
+.btn-custom-primary:hover,
+.btn-custom-primary:focus {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+    color: var(--text-on-primary);
+}
+
+.btn-custom-primary i,
+.btn-outline-dark i {
+    margin-right: 0;
+    font-size: 1rem;
+    line-height: 1;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.main-container {
+    padding: 0 40px;
+}
+
+/* Search filter styles */
+.search-filter {
+    margin-bottom: 20px;
+    max-width: 400px;
+}
+
+/* Table row hover effect */
+.table-hover tbody tr:hover {
+    background-color: rgba(11, 0, 162, 0.05);
+}
+
+.btn-my-green {
+    background-color: white;
+    border-color: green;
+    color: green;
+}
+
+.btn-my-green:hover {
+    background-color: darkgreen;
+    border-color: darkgreen;
+    color: white;
+}
+
+.btn-my-green:focus,
+.btn-my-green.focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 128, 0, 0.5);
+}
+
+.btn-my-green:active,
+.btn-my-green.active {
+    background-color: darkgreen !important;
+    border-color: darkgreen !important;
+}
+
+.btn-my-green:disabled,
+.btn-my-green.disabled {
+    background-color: lightgreen;
+    border-color: lightgreen;
+    color: #6c757d;
+}
+
+/* Card styles */
+.card {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Table styles */
+.table {
+    width: 100%;
+    margin-bottom: 1rem;
+    color: #212529;
+}
+
+.table th {
+    vertical-align: bottom;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Alert styles */
+.alert {
+    position: relative;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+}
+
+/* Badge styles */
+.badge {
+    display: inline-block;
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+}
+
+.bg-success {
+    background-color: #28a745 !important;
+}
+
+.bg-danger {
+    background-color: #dc3545 !important;
+}
+"@ | Out-File -FilePath "core/static/core/css/style.css" -Encoding utf8
 
     # Create main template
     @"
@@ -804,6 +864,9 @@ import os"
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR / "core/static",
+]
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -821,39 +884,7 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
     # Create superuser
     python manage.py createsuperuser
 
-    # Import data if Excel file provided
-    if ($ExcelFilePath -and (Test-Path $ExcelFilePath)) {
-        Write-Host "Importing data from Excel file..." -ForegroundColor $GREEN
-        
-        $tempScriptPath = "temp_import.py"
-        @"
-import os
-import django
-import pandas as pd
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'arpa.settings')
-django.setup()
-
-from core.models import Person
-
-df = pd.read_excel(r'$ExcelFilePath')
-for _, row in df.iterrows():
-    Person.objects.update_or_create(
-        cedula=row['Cedula'],
-        defaults={
-            'nombre_completo': row['NOMBRE COMPLETO'],
-            'cargo': row['CARGO'],
-            'correo': row['Correo'],
-            'compania': row['Compania'],
-            'estado': row['Estado']
-        }
-    )
-print(f"Successfully processed {len(df)} records")
-"@ | Out-File -FilePath $tempScriptPath -Encoding utf8
-
-        python $tempScriptPath
-        Remove-Item -Path $tempScriptPath
-    }
+    python manage.py collectstatic --noinput
 
     # Start the server
     Write-Host "🚀 Starting Django development server..." -ForegroundColor $GREEN
