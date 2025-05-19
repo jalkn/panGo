@@ -53,6 +53,8 @@ import pandas as pd
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 def persons(request):
     persons = Person.objects.all().order_by('nombre_completo')
@@ -192,6 +194,68 @@ def import_from_excel(request):
         return HttpResponseRedirect('/')
     
     return render(request, 'import_excel.html')
+
+def export_to_excel(request):
+    # Get filtered queryset using the same filters as the main view
+    persons = Person.objects.all()
+    
+    # Apply the same filters as in the main view
+    search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+    nombre_filter = request.GET.get('nombre', '')
+    cargo_filter = request.GET.get('cargo', '')
+    compania_filter = request.GET.get('compania', '')
+    order_by = request.GET.get('order_by', 'nombre_completo')
+    
+    if search_query:
+        persons = persons.filter(
+            Q(nombre_completo__icontains=search_query) |
+            Q(cedula__icontains=search_query) |
+            Q(compania__icontains=search_query) |
+            Q(cargo__icontains=search_query))
+    
+    if status_filter:
+        persons = persons.filter(estado=status_filter)
+        
+    if nombre_filter:
+        persons = persons.filter(nombre_completo__icontains=nombre_filter)
+        
+    if cargo_filter:
+        persons = persons.filter(cargo__icontains=cargo_filter)
+        
+    if compania_filter:
+        persons = persons.filter(compania__icontains=compania_filter)
+    
+    if order_by in ['cedula', 'nombre_completo', 'cargo', 'compania']:
+        persons = persons.order_by(order_by)
+
+    # Create a workbook and add a worksheet
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Personas"
+
+    # Add headers
+    headers = ["Cedula", "Nombre Completo", "Cargo", "Correo", "Compania", "Estado"]
+    for col_num, header in enumerate(headers, 1):
+        col_letter = get_column_letter(col_num)
+        ws[f"{col_letter}1"] = header
+
+    # Add data
+    for row_num, person in enumerate(persons, 2):
+        ws[f"A{row_num}"] = person.cedula
+        ws[f"B{row_num}"] = person.nombre_completo
+        ws[f"C{row_num}"] = person.cargo
+        ws[f"D{row_num}"] = person.correo
+        ws[f"E{row_num}"] = person.compania
+        ws[f"F{row_num}"] = person.estado
+
+    # Prepare response
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename=personas.xlsx'
+    
+    # Save workbook to response
+    wb.save(response)
+    return response
 "@ | Out-File -FilePath "core/views.py" -Encoding utf8
 
     # Create urls.py for core app
@@ -203,6 +267,7 @@ urlpatterns = [
     path('', views.main, name='main'),
     path('persons/details/<str:cedula>/', views.details, name='details'),
     path('persons/import/', views.import_from_excel, name='import_excel'),
+    path('persons/export/', views.export_to_excel, name='export_excel'),  # Add this line
 ]
 "@ | Out-File -FilePath "core/urls.py" -Encoding utf8
 
@@ -394,16 +459,20 @@ urlpatterns = [
             <div class="logoIN"></div>
         </a>
         <div class="navbar-title">{% block navbar_title %}ARPA{% endblock %}</div>
-        <div class="navbar-buttons">
-            {% block navbar_buttons %}
-            <a href="/admin/" class="btn btn-outline-dark" title="Admin">
-                <i class="fas fa-wrench"></i>
-            </a>
-            <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
-                <i class="fas fa-database"></i>
-            </a>
-            {% endblock %}
-        </div>
+            <!-- Update the navbar-buttons section in master.html -->
+            <div class="navbar-buttons">
+                {% block navbar_buttons %}
+                <a href="/admin/" class="btn btn-outline-dark" title="Admin">
+                    <i class="fas fa-wrench"></i>
+                </a>
+                <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
+                    <i class="fas fa-database"></i>
+                </a>
+                <a href="/persons/export/?{{ request.GET.urlencode }}" class="btn btn-custom-primary" title="Exportar a Excel">
+                    <i class="fas fa-file-excel"></i>
+                </a>
+                {% endblock %}
+            </div>
     </div>
     
     <div class="main-container">
@@ -438,6 +507,9 @@ urlpatterns = [
 </a>
 <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
     <i class="fas fa-database"></i>
+</a>
+<a href="/persons/export/?{{ request.GET.urlencode }}" class="btn btn-custom-primary btn-lg text-start" title="Export to Excel">
+    <i class="fas fa-file-excel"></i>
 </a>
 {% endblock %}
 
@@ -624,12 +696,15 @@ urlpatterns = [
 {% block navbar_title %}{{ myperson.nombre_completo }}{% endblock %}
 
 {% block navbar_buttons %}
-    <!--<a href="/admin/" class="btn btn-outline-dark btn-lg text-start"><i class="fas fa-wrench me-2"></i></a>-->
-<a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-database"></i></a>
-    <!--<a href="/persons/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-users me-2"></i></a>
-    <a href="bienesyRentas/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-building me-2"></i></a>
-    <a href="conflictos/" class="btn btn-custom-primary btn-lg text-start"><i class="fas fa-balance-scale me-2"></i></a>
-    <a href="alertas/" class="btn btn-outline-danger btn-lg text-start"><i class="fas fa-exclamation-triangle me-2"></i></a>-->
+    <a href="/admin/" class="btn btn-outline-dark" title="Admin">
+        <i class="fas fa-wrench"></i>
+    </a>
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
+        <i class="fas fa-database"></i>
+    </a>
+    <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary" title="Exportar a Excel">
+        <i class="fas fa-file-excel"></i>
+    </a>
 {% endblock %}
 
 {% block content %}
@@ -667,9 +742,9 @@ urlpatterns = [
             </table>
             
             <div class="mt-3">
-                <!--<a href="/" class="btn btn-custom-primary btn-lg text-start">Regresar</a>-->
-                <a href="/admin/core/person/{{ myperson.cedula }}/change/" class="btn btn-custom-primary btn-lg text-start">
-                    <i class="fas fa-pencil-alt me-2"></i>
+                <a href="/" class="btn btn-custom-primary">Regresar</a>
+                <a href="/admin/core/person/{{ myperson.cedula }}/change/" class="btn btn-custom-primary">
+                    <i class="fas fa-pencil-alt me-2"></i> Editar
                 </a>
             </div>
         </div>
