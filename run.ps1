@@ -1392,15 +1392,15 @@ def extract_specific_columns(input_file, output_file, custom_headers=None):
 
 # Example usage with custom headers
 custom_headers = [
-    "ID", "Cedula", "Nombre", "1er Nombre", "1er Apellido", 
-    "2do Apellido", "Compania", "Cargo", "Email", "Fecha de Inicio", 
+    "ID", "# Documento", "Nombre", "1er Nombre", "1er Apellido", 
+    "2do Apellido", "Compañía", "Cargo", "Email", "Fecha de Inicio", 
     "Q1", "Q2", "Q3", "Q4", "Q5",
     "Q6", "Q7", "Q8", "Q9", "Q10"
 ]
 
 extract_specific_columns(
     input_file="src/conflictos.xls",
-    output_file="src/conflicts.xlsx",
+    output_file="tables/conflicts.xlsx",
     custom_headers=custom_headers
 )
 "@
@@ -1417,8 +1417,8 @@ def merge_trends_data(personas_file, trends_file, output_file):
     """
     Merge trends data with personas data:
     - Keeps all records from trends.xlsx
-    - Ensures only 'Compania' column exists (removes 'Compañía')
-    - Adds 'Cedula' from Personas.xlsx at the beginning
+    - Replaces "Compañia" with "Compania" and "Cargo" with "CARGO" from Personas
+    - Adds only 'Cedula' from Personas.xlsx at the beginning
     - Matches on 'Id' (Personas) with 'Usuario' (trends)
     """
     try:
@@ -1445,48 +1445,18 @@ def merge_trends_data(personas_file, trends_file, output_file):
         # Drop the Id column from the merge (we only needed it for matching)
         merged_df = merged_df.drop(columns=['Id'])
         
-        # Handle Compañía/Compania columns - ensure we only have 'Compania'
-        if 'Compañía' in merged_df.columns:
-            # If both exist, use Compania from personas and drop Compañía
-            if 'Compania' in merged_df.columns:
-                merged_df = merged_df.drop(columns=['Compañía'])
-            else:
-                # Just rename Compañía to Compania
-                merged_df = merged_df.rename(columns={'Compañía': 'Compania'})
-        
-        # Handle Cargo columns
-        if 'Cargo' in merged_df.columns and 'CARGO' in merged_df.columns:
-            merged_df['Cargo'] = merged_df['CARGO'].combine_first(merged_df['Cargo'])
+        # Replace Compañia and Cargo columns if they exist in trends
+        if 'Compañia' in merged_df.columns:
+            merged_df['Compañia'] = merged_df['Compania']
+            merged_df = merged_df.drop(columns=['Compania'])
+            
+        if 'Cargo' in merged_df.columns:
+            merged_df['Cargo'] = merged_df['CARGO']
             merged_df = merged_df.drop(columns=['CARGO'])
-        elif 'CARGO' in merged_df.columns:
-            merged_df = merged_df.rename(columns={'CARGO': 'Cargo'})
         
         # Reorder columns to put Cedula first
         cols = ['Cedula'] + [col for col in merged_df.columns if col != 'Cedula']
         merged_df = merged_df[cols]
-        
-        # Ensure the column order matches your desired output
-        desired_columns = [
-            'Cedula', 'Usuario', 'Nombre', 'Compania', 'Cargo', 'fkIdPeriodo', 
-            'Año Declaración', 'Año Creación', 'Activos', 'Cant_Bienes', 
-            'Cant_Bancos', 'Cant_Cuentas', 'Cant_Inversiones', 'Pasivos', 
-            'Cant_Deudas', 'Patrimonio', 'Apalancamiento', 'Endeudamiento', 
-            'Activos Var. Abs.', 'Activos Var. Rel.', 'Pasivos Var. Abs.', 
-            'Pasivos Var. Rel.', 'Patrimonio Var. Abs.', 'Patrimonio Var. Rel.', 
-            'Apalancamiento Var. Abs.', 'Apalancamiento Var. Rel.', 
-            'Endeudamiento Var. Abs.', 'Endeudamiento Var. Rel.', 'BancoSaldo', 
-            'Bienes', 'Inversiones', 'BancoSaldo Var. Abs.', 'BancoSaldo Var. Rel.', 
-            'Bienes Var. Abs.', 'Bienes Var. Rel.', 'Inversiones Var. Abs.', 
-            'Inversiones Var. Rel.', 'Ingresos', 'Cant_Ingresos', 
-            'Ingresos Var. Abs.', 'Ingresos Var. Rel.'
-        ]
-        
-        # Keep only columns that exist in the dataframe and are in desired_columns
-        final_columns = [col for col in desired_columns if col in merged_df.columns]
-        # Add any remaining columns not in desired_columns (except Compañía)
-        remaining_columns = [col for col in merged_df.columns 
-                           if col not in desired_columns and col != 'Compañía']
-        merged_df = merged_df[final_columns + remaining_columns]
         
         # Save to Excel
         with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
