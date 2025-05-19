@@ -611,7 +611,7 @@ body {
 
 {% block content %}
 <!-- Search Form -->
-<div class="card mb-4 border-0 shadow">
+<div class="card mb-4 border-0 shadow" style="background-color:rgb(224, 224, 224);">
     <div class="card-body">
         <form method="get" action="." class="row g-3 align-items-center">
             <!-- General Search -->
@@ -654,8 +654,8 @@ body {
             
             <!-- Submit Buttons -->
             <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-custom-primary btn-lg flex-grow-1">Filtrar</button>
-                <a href="." class="btn btn-outline-secondary btn-lg flex-grow-1">Limpiar</a>
+                <button type="submit" class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-filter"></i></button>
+                <a href="." class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-undo"></i></a>
             </div>
         </form>
     </div>
@@ -666,39 +666,39 @@ body {
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-striped table-hover mb-0">
-                    <thead class="table-dark">
+                    <thead>
                         <tr>
                             <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cedula&sort_direction={% if current_order == 'cedula' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cedula&sort_direction={% if current_order == 'cedula' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
                                     ID
                                 </a>
                             </th>
                             <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=nombre_completo&sort_direction={% if current_order == 'nombre_completo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=nombre_completo&sort_direction={% if current_order == 'nombre_completo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
                                     Nombre
                                 </a>
                             </th>
                             <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cargo&sort_direction={% if current_order == 'cargo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cargo&sort_direction={% if current_order == 'cargo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
                                     Cargo
                                 </a>
                             </th>
                             <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=correo&sort_direction={% if current_order == 'correo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=correo&sort_direction={% if current_order == 'correo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
                                     Correo
                                 </a>
                             </th>
                             <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=compania&sort_direction={% if current_order == 'compania' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=compania&sort_direction={% if current_order == 'compania' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
                                     Compania
                                 </a>
                             </th>
                             <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=estado&sort_direction={% if current_order == 'estado' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: white;">
+                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=estado&sort_direction={% if current_order == 'estado' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
                                     Estado
                                 </a>
                             </th>
-                            <th>Ver</th>
+                            <th style="color: rgb(0, 0, 0);">Ver</th>
                         </tr>
                     </thead>
                 <tbody>
@@ -792,12 +792,7 @@ body {
 {% block navbar_title %}Importar Datos{% endblock %}
 
 {% block navbar_buttons %}
-<a href="/admin/" class="btn btn-outline-dark btn-lg text-start" title="Admin Panel">
-    <i class="fas fa-wrench"></i>
-</a>
-<a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
-    <i class="fas fa-database"></i>
-</a>
+<a href="/" class="btn btn-custom-primary"><i class="fas fa-arrow-right"></i></a>
 {% endblock %}
 
 {% block content %}
@@ -825,15 +820,13 @@ body {
 {% block navbar_title %}{{ myperson.nombre_completo }}{% endblock %}
 
 {% block navbar_buttons %}
-<a href="/admin/" class="btn btn-outline-dark" title="Admin">
+<a href="/admin/core/person/{{ myperson.cedula }}/change/" class="btn btn-outline-dark" title="Admin">
     <i class="fas fa-wrench"></i>
-</a>
-<a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
-    <i class="fas fa-database"></i>
 </a>
 <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">  
     <i class="fas fa-file-excel"></i>
 </a>
+<a href="/" class="btn btn-custom-primary"><i class="fas fa-arrow-right"></i></a>
 {% endblock %}
 
 {% block content %}
@@ -869,13 +862,6 @@ body {
                     </td>
                 </tr>
             </table>
-            
-            <div class="mt-3">
-                <a href="/" class="btn btn-custom-primary">Regresar</a>
-                <a href="/admin/core/person/{{ myperson.cedula }}/change/" class="btn btn-custom-primary">
-                    <i class="fas fa-pencil-alt me-2"></i> Editar
-                </a>
-            </div>
         </div>
     </div>
 {% endblock %}
