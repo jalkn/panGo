@@ -207,13 +207,88 @@ def export_to_excel(request):
         ws[f"D{row_num}"] = person.correo
         ws[f"E{row_num}"] = person.compania
         ws[f"F{row_num}"] = person.estado
-        ws[f"G{row_num}"] = "Sí" if person.revisar else "No"
+        ws[f"G{row_num}"] = "SÃ­" if person.revisar else "No"
         ws[f"H{row_num}"] = person.comments or ""
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename=personas.xlsx'
     wb.save(response)
     return response
+
+def import_protected_excel(request):
+    """
+    View for importing data from password-protected Excel files
+    """
+    if request.method == 'POST' and request.FILES.get('protected_excel_file'):
+        excel_file = request.FILES['protected_excel_file']
+        password = request.POST.get('excel_password', '')
+        
+        try:
+            # Save the uploaded file temporarily
+            temp_path = "core/src/dataHistoricaPBI.xlsx"
+            with open(temp_path, 'wb+') as destination:
+                for chunk in excel_file.chunks():
+                    destination.write(chunk)
+            
+            # Process the file using passKey.py functionality
+            from core.passKey import remove_excel_password, add_fk_id_estado
+            import os
+            import sys
+            from io import StringIO
+            
+            # Redirect stdout to capture output
+            old_stdout = sys.stdout
+            sys.stdout = mystdout = StringIO()
+            
+            output_excel = "core/src/data.xlsx"
+            output_json = "core/src/fk1data.json"
+            
+            # Create a modified version of remove_excel_password that accepts password as parameter
+            def remove_excel_password_browser(input_file, output_file, password):
+                try:
+                    import msoffcrypto
+                    with open(input_file, "rb") as file:
+                        office_file = msoffcrypto.OfficeFile(file)
+                        if office_file.is_encrypted():
+                            if not password:
+                                return False, "No password provided"
+                            try:
+                                office_file.load_key(password=password)
+                            except Exception as e:
+                                return False, "Incorrect password"
+                        else:
+                            office_file.load_key(password=None)
+                        
+                        with open(output_file, "wb") as decrypted:
+                            office_file.decrypt(decrypted)
+                    return True, "File processed successfully"
+                except Exception as e:
+                    return False, str(e)
+            
+            success, message = remove_excel_password_browser(temp_path, output_excel, password)
+            
+            if success:
+                json_success = add_fk_id_estado(output_excel, output_json)
+                if json_success:
+                    messages.success(request, 'Archivo protegido procesado exitosamente!')
+                else:
+                    messages.warning(request, 'Archivo desencriptado pero falló la generación del JSON')
+            else:
+                messages.error(request, f'Error al procesar el archivo protegido: {message}')
+            
+            # Clean up temporary file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            
+            # Restore stdout
+            sys.stdout = old_stdout
+            
+        except Exception as e:
+            messages.error(request, f'Error importing protected file: {str(e)}')
+        
+        return HttpResponseRedirect('/persons/import/')
+    
+    return HttpResponseRedirect('/persons/import/')
 "@ | Out-File -FilePath "core/views.py" -Encoding utf8
 
     # Create urls.py for core app
@@ -225,7 +300,8 @@ urlpatterns = [
     path('', views.main, name='main'),
     path('persons/details/<str:cedula>/', views.details, name='details'),
     path('persons/import/', views.import_from_excel, name='import_excel'),
-    path('persons/export/', views.export_to_excel, name='export_excel'),  # Add this line
+    path('persons/import-protected/', views.import_protected_excel, name='import_protected_excel'),
+    path('persons/export/', views.export_to_excel, name='export_excel'),
 ]
 "@ | Out-File -FilePath "core/urls.py" -Encoding utf8
 
@@ -294,11 +370,184 @@ urlpatterns = [
         "core/static/core",
         "core/static/core/css",
         "core/templates",
-        "core/templates/admin"
+        "core/templates/admin",
+        "core/src",
+        "core/models"
     )
     foreach ($dir in $directories) {
         New-Item -Path $dir -ItemType Directory -Force
     }
+
+    # period.py
+@"
+from openpyxl import Workbook
+from openpyxl.styles import Font
+
+def create_excel_file():
+    # Create a new workbook and select the active worksheet
+    wb = Workbook()
+    ws = wb.active
+    
+    # Define the header row
+    headers = [
+        "Id", "Activo", "Año", "FechaFinDeclaracion", 
+        "FechaInicioDeclaracion", "Año declaracion"
+    ]
+    
+    # Write the headers to the first row and make them bold
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num, value=header)
+        cell.font = Font(bold=True)
+    
+    # Data rows
+    data = [
+        [2, True, "Friday, January 01, 2021", "4/30/2022", "6/1/2021", "2,021"],
+        [6, True, "Saturday, January 01, 2022", "3/31/2023", "10/19/2022", "2,022"],
+        [7, True, "Sunday, January 01, 2023", "5/12/2024", "11/1/2023", "2,023"],
+        [8, True, "Monday, January 01, 2024", "1/1/2025", "10/2/2024", "2,024"]
+    ]
+    
+    # Write data rows
+    for row_num, row_data in enumerate(data, 2):  # Start from row 2
+        for col_num, cell_value in enumerate(row_data, 1):
+            ws.cell(row=row_num, column=col_num, value=cell_value)
+    
+    # Auto-adjust column widths
+    for column in ws.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = (max_length + 2)
+        ws.column_dimensions[column_letter].width = adjusted_width
+    
+    # Save the workbook
+    filename = "core/src/periodoBR.xlsx"
+    wb.save(filename)
+    print(f"Excel file '{filename}' created successfully!")
+
+if __name__ == "__main__":
+    create_excel_file()
+"@ | Out-File -FilePath "core/period.py" -Encoding utf8 -Force
+
+#Create passkey.py
+@"
+import msoffcrypto
+import openpyxl
+import sys
+import os
+import json
+import getpass
+from datetime import datetime
+
+def log_message(message):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] {message}")
+
+def remove_excel_password(input_file, output_file=None):
+    """Handle password protected Excel files"""
+    try:
+        with open(input_file, "rb") as file:
+            office_file = msoffcrypto.OfficeFile(file)
+            
+            # Check if file is encrypted
+            if office_file.is_encrypted():
+                # Prompt for password if encrypted
+                password = getpass.getpass("El archivo está protegido con contraseña. Por favor ingrésala: ")
+                try:
+                    office_file.load_key(password=password)
+                except Exception as e:
+                    log_message(f"Error: Contraseña incorrecta o no válida")
+                    return False
+            else:
+                # File is not encrypted
+                office_file.load_key(password=None)
+            
+            with open(output_file, "wb") as decrypted:
+                office_file.decrypt(decrypted)
+        
+        log_message(f"Archivo procesado correctamente. Guardado en '{output_file}'")
+        return True
+        
+    except Exception as e:
+        log_message(f"Error al procesar el archivo: {str(e)}")
+        return False
+
+def add_fk_id_estado(input_file, output_file):
+    try:
+        wb = openpyxl.load_workbook(input_file, read_only=True)
+        ws = wb.active
+        
+        # Find header row
+        headers = [cell.value for cell in ws[1]]
+        
+        # Add fkIdEstado if needed
+        if 'fkIdEstado' not in headers:
+            headers.append('fkIdEstado')
+            fk_col = len(headers)
+        else:
+            fk_col = headers.index('fkIdEstado') + 1
+        
+        # Convert to JSON in chunks
+        data = []
+        chunk_size = 1000
+        log_message(f"Total de filas a procesar: {ws.max_row}")
+        
+        for row_num, row in enumerate(ws.iter_rows(min_row=2), start=2):
+            if row_num % chunk_size == 0:
+                log_message(f"Procesadas {row_num} filas")
+                
+            row_data = {headers[i]: cell.value for i, cell in enumerate(row)}
+            row_data['fkIdEstado'] = 1
+            data.append(row_data)
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+            
+        log_message(f"Procesadas correctamente {len(data)} filas")
+        return True
+        
+    except Exception as e:
+        log_message(f"Error: {str(e)}")
+        return False
+
+if __name__ == "__main__":
+    try:
+        input("\nPega el archivo de Excel en la carpeta 'core/src/' y asegúrate de nombrarlo 'dataHistoricaPBI.xlsx'. Presiona Enter cuando estés listo...")
+
+        input_excel_file = "core/src/dataHistoricaPBI.xlsx"
+        if not os.path.exists(input_excel_file):
+            log_message(f"ERROR: No se encontró el archivo '{input_excel_file}'")
+            log_message("Por favor verifica:")
+            log_message("1. Que existe el directorio 'core/src/'")
+            log_message("2. Que el archivo está en 'core/src/'")
+            log_message("3. Que el archivo se llama 'dataHistoricaPBI.xlsx'")
+            sys.exit(1)
+
+        output_excel_file = "core/src/data.xlsx"
+        output_json_file = "core/src/fk1data.json"
+
+        if remove_excel_password(input_excel_file, output_excel_file):
+            if add_fk_id_estado(output_excel_file, output_json_file):
+                log_message("\nPROCESO COMPLETADO EXITOSAMENTE")
+                log_message(f"- Archivo desencriptado: {output_excel_file}")
+                log_message(f"- Archivo JSON generado: {output_json_file}")
+            else:
+                log_message("\nPROCESO PARCIALMENTE COMPLETADO")
+                log_message(f"- Archivo desencriptado: {output_excel_file}")
+                log_message("- Falló la generación del archivo JSON")
+        else:
+            log_message("\nPROCESO FALLIDO")
+            log_message("- No se pudo desencriptar el archivo de entrada")
+    except KeyboardInterrupt:
+        log_message("\nOperación cancelada por el usuario")
+    except Exception as e:
+        log_message(f"\nERROR INESPERADO: {str(e)}")
+"@ | Out-File -FilePath "core/passKey.py" -Encoding utf8 -Force
 
     # Create custom admin base template
     @"
@@ -769,16 +1018,43 @@ body {
 {% block content %}
     <div class="card">
         <div class="card-body">
-            <form method="post" enctype="multipart/form-data">
+            <form method="post" enctype="multipart/form-data" action="{% url 'import_excel' %}">
                 {% csrf_token %}
                 <div class="mb-3">
-                    <input type="file" class="form-control" id="excel_file" name="excel_file" required title="Seleccionar archivo">
+                    <input type="file" class="form-control" id="excel_file" name="excel_file" required>
                     <div class="form-text">El archivo Excel de Personas debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
                 </div>
                 <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
                 <!--<a href="/" class="btn btn-custom-primary btn-lg text-start">Cancelar</a>-->
             </form>
         </div>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" action="{% url 'import_protected_excel' %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <input type="file" class="form-control" id="protected_excel_file" name="protected_excel_file" required>
+                    <div class="form-text">El archivo Excel de Bienes y Rentas debe incluir las columnas: </div>
+                    <div class="mb-3">
+                        <input type="password" class="form-control" id="excel_password" name="excel_password">
+                        <div class="form-text">Ingrese la contraseña</div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
+                <!--<a href="/" class="btn btn-custom-primary btn-lg text-start">Cancelar</a>-->
+            </form>
+        </div>
+        {% if messages %}
+            <div class="card-footer">
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
     </div>
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/import_excel.html" -Encoding utf8
@@ -880,13 +1156,14 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
 "@
 
     # Run migrations
+    python core/period.py
     python manage.py makemigrations core
     python manage.py migrate
 
     # Create superuser
-    python manage.py createsuperuser
+    #python manage.py createsuperuser
 
-    python manage.py collectstatic --noinput
+    #python manage.py collectstatic --noinput
 
     # Start the server
     Write-Host "🚀 Starting Django development server..." -ForegroundColor $GREEN
@@ -894,3 +1171,4 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
 }
 
 migratoDjango
+createPeriod

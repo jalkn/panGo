@@ -25,3 +25,5 @@ transactions.xlsx
 colName.py
 db.mmd
 DBcommands.txt
+merge.ps1
+build.ps1
