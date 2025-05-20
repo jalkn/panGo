@@ -19,7 +19,7 @@ function migratoDjango {
     python manage.py startapp core
 
     # Create models.py with cedula as primary key
-    @"
+@" 
 from django.db import models
 
 class Person(models.Model):
@@ -34,6 +34,8 @@ class Person(models.Model):
     correo = models.EmailField(max_length=255, verbose_name="Correo")
     compania = models.CharField(max_length=255, verbose_name="Compania")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='Activo', verbose_name="Estado")
+    revisar = models.BooleanField(default=False, verbose_name="Revisar")
+    comments = models.TextField(blank=True, null=True, verbose_name="Comentarios")
 
     def __str__(self):
         return f"{self.cedula} - {self.nombre_completo}"
@@ -41,7 +43,7 @@ class Person(models.Model):
     class Meta:
         verbose_name = "Persona"
         verbose_name_plural = "Personas"
-"@ | Out-File -FilePath "core/models.py" -Encoding utf8
+"@ | Out-File -FilePath "core/models.py" -Encoding utf8 -Force
 
     # Create views.py with import functionality
     @"
@@ -192,7 +194,9 @@ def import_from_excel(request):
                         'cargo': row['cargo'],
                         'correo': row['correo'],
                         'compania': row['compania'],
-                        'estado': row['estado'] if row['estado'] in ['Activo', 'Retirado'] else 'Activo'
+                        'estado': row['estado'] if row['estado'] in ['Activo', 'Retirado'] else 'Activo',
+                        'revisar': row.get('revisar', False),
+                        'comments': row.get('comments', ''),
                     }
                 )
             
@@ -246,7 +250,7 @@ def export_to_excel(request):
     ws = wb.active
     ws.title = "Personas"
 
-    headers = ["Cedula", "Nombre Completo", "Cargo", "Correo", "Compania", "Estado"]
+    headers = ["Cedula", "Nombre Completo", "Cargo", "Correo", "Compania", "Estado", "Revisar", "Comentarios"]
     for col_num, header in enumerate(headers, 1):
         col_letter = get_column_letter(col_num)
         ws[f"{col_letter}1"] = header
@@ -258,6 +262,8 @@ def export_to_excel(request):
         ws[f"D{row_num}"] = person.correo
         ws[f"E{row_num}"] = person.compania
         ws[f"F{row_num}"] = person.estado
+        ws[f"G{row_num}"] = "Sí" if person.revisar else "No"
+        ws[f"H{row_num}"] = person.comments or ""
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename=personas.xlsx'
@@ -279,7 +285,7 @@ urlpatterns = [
 "@ | Out-File -FilePath "core/urls.py" -Encoding utf8
 
     # Create admin.py with enhanced configuration
-    @"
+@" 
 from django.contrib import admin
 from .models import Person
 
@@ -291,13 +297,21 @@ def make_retired(modeladmin, request, queryset):
     queryset.update(estado='Retirado')
 make_retired.short_description = "Mark selected as Retired"
 
+def mark_for_check(modeladmin, request, queryset):
+    queryset.update(revisar=True)
+mark_for_check.short_description = "Mark for check"
+
+def unmark_for_check(modeladmin, request, queryset):
+    queryset.update(revisar=False)
+unmark_for_check.short_description = "Unmark for check"
+
 class PersonAdmin(admin.ModelAdmin):
-    list_display = ("cedula", "nombre_completo", "cargo", "correo", "compania", "estado")
-    search_fields = ("nombre_completo", "cedula")
-    list_filter = ("estado", "compania")
+    list_display = ("cedula", "nombre_completo", "cargo", "correo", "compania", "estado", "revisar")
+    search_fields = ("nombre_completo", "cedula", "comments")
+    list_filter = ("estado", "compania", "revisar")
     list_per_page = 25
     ordering = ('nombre_completo',)
-    actions = [make_active, make_retired]
+    actions = [make_active, make_retired, mark_for_check, unmark_for_check]
     
     fieldsets = (
         (None, {
@@ -305,12 +319,12 @@ class PersonAdmin(admin.ModelAdmin):
         }),
         ('Advanced options', {
             'classes': ('collapse',),
-            'fields': ('correo', 'compania', 'estado'),
+            'fields': ('correo', 'compania', 'estado', 'revisar', 'comments'),
         }),
     )
     
 admin.site.register(Person, PersonAdmin)
-"@ | Out-File -FilePath "core/admin.py" -Encoding utf8
+"@ | Out-File -FilePath "core/admin.py" -Encoding utf8 -Force
 
     # Update project urls.py with proper admin configuration
     @"
@@ -508,8 +522,8 @@ body {
 
 .btn-my-green {
     background-color: white;
-    border-color: green;
-    color: green;
+    border-color: rgb(0, 166, 0);
+    color: rgb(0, 166, 0);
 }
 
 .btn-my-green:hover {
@@ -582,7 +596,7 @@ body {
 }
 
 .bg-success {
-    background-color: #28a745 !important;
+    background-color:rgb(0, 166, 0) !important;
 }
 
 .bg-danger {
@@ -591,7 +605,7 @@ body {
 "@ | Out-File -FilePath "core/static/core/css/style.css" -Encoding utf8
 
     # Create main template
-    @"
+@" 
 {% extends "master.html" %}
 
 {% block title %}A R P A{% endblock %}
@@ -666,44 +680,50 @@ body {
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-striped table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cedula&sort_direction={% if current_order == 'cedula' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                    ID
-                                </a>
-                            </th>
-                            <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=nombre_completo&sort_direction={% if current_order == 'nombre_completo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                    Nombre
-                                </a>
-                            </th>
-                            <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cargo&sort_direction={% if current_order == 'cargo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                    Cargo
-                                </a>
-                            </th>
-                            <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=correo&sort_direction={% if current_order == 'correo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                    Correo
-                                </a>
-                            </th>
-                            <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=compania&sort_direction={% if current_order == 'compania' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                    Compania
-                                </a>
-                            </th>
-                            <th>
-                                <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=estado&sort_direction={% if current_order == 'estado' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                    Estado
-                                </a>
-                            </th>
-                            <th style="color: rgb(0, 0, 0);">Ver</th>
-                        </tr>
-                    </thead>
+                <thead>
+                    <tr>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cedula&sort_direction={% if current_order == 'cedula' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                ID
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=nombre_completo&sort_direction={% if current_order == 'nombre_completo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Nombre
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cargo&sort_direction={% if current_order == 'cargo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cargo
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=correo&sort_direction={% if current_order == 'correo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Correo
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=compania&sort_direction={% if current_order == 'compania' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Compania
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=estado&sort_direction={% if current_order == 'estado' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Estado
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=revisar&sort_direction={% if current_order == 'revisar' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Revisar
+                            </a>
+                        </th>
+                        <th style="color: rgb(0, 0, 0);">Comentarios</th>
+                        <th style="color: rgb(0, 0, 0);">Ver</th>
+                    </tr>
+                </thead>
                 <tbody>
                     {% for person in persons %}
-                        <tr>
+                        <tr {% if person.revisar %}class="table-warning"{% endif %}>
                             <td>{{ person.cedula }}</td>
                             <td>{{ person.nombre_completo }}</td>
                             <td>{{ person.cargo }}</td>
@@ -715,6 +735,12 @@ body {
                                 </span>
                             </td>
                             <td>
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisión{% else %}No marcado{% endif %}">
+                                    <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}"></i>
+                                </a>
+                            </td>
+                            <td>{{ person.comments|truncatechars:30|default:"" }}</td>
+                            <td>
                                 <a href="/persons/details/{{ person.cedula }}/" 
                                    class="btn btn-custom-primary btn-sm"
                                    title="View details">
@@ -724,7 +750,7 @@ body {
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-4">
+                            <td colspan="9" class="text-center py-4">
                                 {% if request.GET.q or request.GET.status or request.GET.cargo or request.GET.compania %}
                                     Sin registros que coincidan con los filtros.
                                 {% else %}
@@ -782,7 +808,7 @@ body {
     </div>
 </div>
 {% endblock %}
-"@ | Out-File -FilePath "core/templates/main.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/main.html" -Encoding utf8 -Force
 
     # Create import template
     @"
@@ -860,6 +886,20 @@ body {
                             {{ myperson.estado }}
                         </span>
                     </td>
+                </tr>
+                <tr>
+                    <th>Necesita revisión:</th>
+                    <td>
+                        {% if myperson.revisar %}
+                            <span class="badge bg-warning text-dark">Sí</span>
+                        {% else %}
+                            <span class="badge bg-secondary">No</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Comentarios:</th>
+                    <td>{{ myperson.comments|linebreaks }}</td>
                 </tr>
             </table>
         </div>
