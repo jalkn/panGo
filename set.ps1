@@ -15,7 +15,7 @@ function migratoDjango {
     django-admin startproject arpa
     cd arpa
 
-    # Create core app (changed from persons)
+    # Create core app
     python manage.py startapp core
 
     # Create models.py with cedula as primary key
@@ -58,22 +58,22 @@ from django.db.models import Q
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
-def persons(request):
-    persons = Person.objects.all()
-    
-    # Get filter and sorting parameters from request
-    search_query = request.GET.get('q', '')
-    status_filter = request.GET.get('status', '')
-    nombre_filter = request.GET.get('nombre', '')
-    cargo_filter = request.GET.get('cargo', '')
-    compania_filter = request.GET.get('compania', '')
-    correo_filter = request.GET.get('correo', '')
-    order_by = request.GET.get('order_by', 'nombre_completo')
-    sort_direction = request.GET.get('sort_direction', 'asc')
+def _apply_filters_and_sorting(queryset, request_params):
+    """
+    Helper function to apply filters and sorting to a queryset based on request parameters.
+    """
+    search_query = request_params.get('q', '')
+    status_filter = request_params.get('status', '')
+    nombre_filter = request_params.get('nombre', '')
+    cargo_filter = request_params.get('cargo', '')
+    compania_filter = request_params.get('compania', '')
+    correo_filter = request_params.get('correo', '')
+    order_by = request_params.get('order_by', 'nombre_completo')
+    sort_direction = request_params.get('sort_direction', 'asc')
     
     # Apply filters
     if search_query:
-        persons = persons.filter(
+        queryset = queryset.filter(
             Q(nombre_completo__icontains=search_query) |
             Q(cedula__icontains=search_query) |
             Q(compania__icontains=search_query) |
@@ -81,95 +81,71 @@ def persons(request):
             Q(correo__icontains=search_query))
     
     if status_filter:
-        persons = persons.filter(estado=status_filter)
+        queryset = queryset.filter(estado=status_filter)
     if nombre_filter:
-        persons = persons.filter(nombre_completo__icontains=nombre_filter)
+        queryset = queryset.filter(nombre_completo__icontains=nombre_filter)
     if cargo_filter:
-        persons = persons.filter(cargo__icontains=cargo_filter)
+        queryset = queryset.filter(cargo__icontains=cargo_filter)
     if compania_filter:
-        persons = persons.filter(compania__icontains=compania_filter)
+        queryset = queryset.filter(compania__icontains=compania_filter)
     if correo_filter:
-        persons = persons.filter(correo__icontains=correo_filter)
+        queryset = queryset.filter(correo__icontains=correo_filter)
     
-    # Apply sorting with direction
+    # Apply sorting
     if order_by in ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado']:
         if sort_direction == 'desc':
             order_by = f'-{order_by}'
-        persons = persons.order_by(order_by)
-    
-    context = {
-        'persons': persons,
-        'current_order': order_by.replace('-', ''),
-        'current_direction': sort_direction,
-    }
-    return render(request, 'main.html', context)
+        queryset = queryset.order_by(order_by)
+        
+    return queryset
 
-def details(request, cedula):
-    myperson = Person.objects.get(cedula=cedula)
-    return render(request, 'details.html', {'myperson': myperson})
+def _get_dropdown_values():
+    """
+    Helper function to get distinct values for dropdown filters
+    """
+    return {
+        'cargos': Person.objects.values_list('cargo', flat=True).distinct().order_by('cargo'),
+        'companias': Person.objects.values_list('compania', flat=True).distinct().order_by('compania'),
+        'estados': Person.objects.values_list('estado', flat=True).distinct().order_by('estado'),
+    }
 
 def main(request):
+    """
+    Main view showing the list of persons with filtering and pagination
+    """
     persons = Person.objects.all()
+    persons = _apply_filters_and_sorting(persons, request.GET)
     
-    # Get filter and sorting parameters
-    search_query = request.GET.get('q', '')
-    status_filter = request.GET.get('status', '')
-    nombre_filter = request.GET.get('nombre', '')
-    cargo_filter = request.GET.get('cargo', '')
-    compania_filter = request.GET.get('compania', '')
-    correo_filter = request.GET.get('correo', '')
-    order_by = request.GET.get('order_by', 'nombre_completo')
-    sort_direction = request.GET.get('sort_direction', 'asc')
-    
-    # Apply filters
-    if search_query:
-        persons = persons.filter(
-            Q(nombre_completo__icontains=search_query) |
-            Q(cedula__icontains=search_query) |
-            Q(compania__icontains=search_query) |
-            Q(cargo__icontains=search_query) |
-            Q(correo__icontains=search_query))
-    
-    if status_filter:
-        persons = persons.filter(estado=status_filter)
-    if nombre_filter:
-        persons = persons.filter(nombre_completo__icontains=nombre_filter)
-    if cargo_filter:
-        persons = persons.filter(cargo__icontains=cargo_filter)
-    if compania_filter:
-        persons = persons.filter(compania__icontains=compania_filter)
-    if correo_filter:
-        persons = persons.filter(correo__icontains=correo_filter)
-    
-    # Apply sorting with direction
-    if order_by in ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado']:
-        if sort_direction == 'desc':
-            order_by = f'-{order_by}'
-        persons = persons.order_by(order_by)
-    
-    # Get unique values for dropdowns
-    cargos = Person.objects.values_list('cargo', flat=True).distinct().order_by('cargo')
-    companias = Person.objects.values_list('compania', flat=True).distinct().order_by('compania')
-    estados = Person.objects.values_list('estado', flat=True).distinct().order_by('estado')
+    # Get dropdown values
+    dropdown_values = _get_dropdown_values()
     
     # Pagination
     paginator = Paginator(persons, 1000)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    return render(request, 'main.html', {
+    context = {
         'page_obj': page_obj,
         'persons': page_obj.object_list,
         'persons_count': persons.count(),
-        'cargos': cargos,
-        'companias': companias,
-        'estados': estados,
-        'current_order': order_by.replace('-', ''),
-        'current_direction': sort_direction,
+        'current_order': request.GET.get('order_by', 'nombre_completo').replace('-', ''),
+        'current_direction': request.GET.get('sort_direction', 'asc'),
         'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
-    })
+        **dropdown_values
+    }
+    return render(request, 'persons.html', context)
+
+def details(request, cedula):
+    """
+    View showing details for a single person
+    """
+    myperson = Person.objects.get(cedula=cedula)
+    return render(request, 'details.html', {'myperson': myperson})
 
 def import_from_excel(request):
+    """
+    View for importing data from Excel files
+    """
     if request.method == 'POST' and request.FILES.get('excel_file'):
         excel_file = request.FILES['excel_file']
         try:
@@ -209,42 +185,11 @@ def import_from_excel(request):
     return render(request, 'import_excel.html')
 
 def export_to_excel(request):
+    """
+    View for exporting filtered data to Excel
+    """
     persons = Person.objects.all()
-    
-    # Apply filters
-    search_query = request.GET.get('q', '')
-    status_filter = request.GET.get('status', '')
-    nombre_filter = request.GET.get('nombre', '')
-    cargo_filter = request.GET.get('cargo', '')
-    compania_filter = request.GET.get('compania', '')
-    correo_filter = request.GET.get('correo', '')
-    order_by = request.GET.get('order_by', 'nombre_completo')
-    sort_direction = request.GET.get('sort_direction', 'asc')
-    
-    if search_query:
-        persons = persons.filter(
-            Q(nombre_completo__icontains=search_query) |
-            Q(cedula__icontains=search_query) |
-            Q(compania__icontains=search_query) |
-            Q(cargo__icontains=search_query) |
-            Q(correo__icontains=search_query))
-    
-    if status_filter:
-        persons = persons.filter(estado=status_filter)
-    if nombre_filter:
-        persons = persons.filter(nombre_completo__icontains=nombre_filter)
-    if cargo_filter:
-        persons = persons.filter(cargo__icontains=cargo_filter)
-    if compania_filter:
-        persons = persons.filter(compania__icontains=compania_filter)
-    if correo_filter:
-        persons = persons.filter(correo__icontains=correo_filter)
-    
-    # Apply sorting
-    if order_by in ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado']:
-        if sort_direction == 'desc':
-            order_by = f'-{order_by}'
-        persons = persons.order_by(order_by)
+    persons = _apply_filters_and_sorting(persons, request.GET)
 
     wb = Workbook()
     ws = wb.active
@@ -604,7 +549,7 @@ body {
 }
 "@ | Out-File -FilePath "core/static/core/css/style.css" -Encoding utf8
 
-    # Create main template
+    # Create persons template
 @" 
 {% extends "master.html" %}
 
@@ -683,6 +628,11 @@ body {
                 <thead>
                     <tr>
                         <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=revisar&sort_direction={% if current_order == 'revisar' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Revisar
+                            </a>
+                        </th>
+                        <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cedula&sort_direction={% if current_order == 'cedula' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
                                 ID
                             </a>
@@ -712,11 +662,6 @@ body {
                                 Estado
                             </a>
                         </th>
-                        <th>
-                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=revisar&sort_direction={% if current_order == 'revisar' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Revisar
-                            </a>
-                        </th>
                         <th style="color: rgb(0, 0, 0);">Comentarios</th>
                         <th style="color: rgb(0, 0, 0);">Ver</th>
                     </tr>
@@ -724,6 +669,11 @@ body {
                 <tbody>
                     {% for person in persons %}
                         <tr {% if person.revisar %}class="table-warning"{% endif %}>
+                            <td>
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisión{% else %}No marcado{% endif %}">
+                                    <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}" style="padding-left: 20px;"></i>
+                                </a>
+                            </td>
                             <td>{{ person.cedula }}</td>
                             <td>{{ person.nombre_completo }}</td>
                             <td>{{ person.cargo }}</td>
@@ -733,11 +683,6 @@ body {
                                 <span class="badge bg-{% if person.estado == 'Activo' %}success{% else %}danger{% endif %}">
                                     {{ person.estado }}
                                 </span>
-                            </td>
-                            <td>
-                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisión{% else %}No marcado{% endif %}">
-                                    <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}"></i>
-                                </a>
                             </td>
                             <td>{{ person.comments|truncatechars:30|default:"" }}</td>
                             <td>
@@ -808,7 +753,7 @@ body {
     </div>
 </div>
 {% endblock %}
-"@ | Out-File -FilePath "core/templates/main.html" -Encoding utf8 -Force
+"@ | Out-File -FilePath "core/templates/persons.html" -Encoding utf8 -Force
 
     # Create import template
     @"
@@ -888,7 +833,7 @@ body {
                     </td>
                 </tr>
                 <tr>
-                    <th>Necesita revisión:</th>
+                    <th>Por revisar:</th>
                     <td>
                         {% if myperson.revisar %}
                             <span class="badge bg-warning text-dark">Sí</span>
