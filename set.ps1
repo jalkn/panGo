@@ -1016,6 +1016,587 @@ if __name__ == "__main__":
     run_all_analyses()
 "@
 
+# Create nets.py
+Set-Content -Path "core/nets.py" -Value @"
+import pandas as pd
+
+# Common columns used across all analyses
+COMMON_COLUMNS = [
+    'Usuario', 'Nombre', 'Compañía', 'Cargo',
+    'fkIdPeriodo', 'fkIdEstado',
+    'Año Creación', 'Año Envío',
+    'RUBRO DE DECLARACIÓN', 'fkIdDeclaracion',
+    'Año Declaración'
+]
+
+# Base groupby columns for summaries
+BASE_GROUPBY = ['Usuario', 'Nombre', 'Compañía', 'Cargo', 'fkIdPeriodo', 'Año Declaración', 'Año Creación']
+
+def analyze_banks(file_path, output_file_path):
+    """Analyze bank accounts data"""
+    df = pd.read_excel(file_path)
+
+    # Specific columns for banks
+    bank_columns = [
+        'Banco - Entidad', 'Banco - Tipo Cuenta',
+        'Banco - fkIdPaís', 'Banco - Nombre País',
+        'Banco - Saldo', 'Banco - Comentario',
+        'Banco - Saldo COP'
+    ]
+    
+    df = df[COMMON_COLUMNS + bank_columns]
+    
+    # Create a temporary combination column for counting
+    df_temp = df.copy()
+    df_temp['Bank_Account_Combo'] = df['Banco - Entidad'] + "|" + df['Banco - Tipo Cuenta']
+    
+    # Perform all aggregations
+    summary = df_temp.groupby(BASE_GROUPBY).agg(
+        **{
+            'Cant_Bancos': pd.NamedAgg(column='Banco - Entidad', aggfunc='nunique'),
+            'Cant_Cuentas': pd.NamedAgg(column='Bank_Account_Combo', aggfunc='nunique'),
+            'Banco - Saldo COP': pd.NamedAgg(column='Banco - Saldo COP', aggfunc='sum')
+        }
+    ).reset_index()
+
+    summary.to_excel(output_file_path, index=False)
+    return summary
+
+def analyze_debts(file_path, output_file_path):
+    """Analyze debts data"""
+    df = pd.read_excel(file_path)
+
+    # Specific columns for debts
+    debt_columns = [
+        'Pasivos - Entidad Personas', 'Pasivos - Tipo Obligación', 
+        'Pasivos - Valor', 'Pasivos - Comentario',
+        'Pasivos - Valor COP', 'Texto Moneda'
+    ]
+    
+    df = df[COMMON_COLUMNS + debt_columns]
+    
+    # Calculate total Pasivos and count occurrences
+    summary = df.groupby(BASE_GROUPBY).agg({      
+        'Pasivos - Valor COP': 'sum',
+        'Pasivos - Entidad Personas': 'count'
+    }).reset_index()
+
+    # Rename columns for clarity
+    summary = summary.rename(columns={
+        'Pasivos - Entidad Personas': 'Cant_Deudas',
+        'Pasivos - Valor COP': 'Total Pasivos'
+    })
+
+    summary.to_excel(output_file_path, index=False)
+    return summary
+
+def analyze_goods(file_path, output_file_path):
+    """Analyze goods/assets data"""
+    df = pd.read_excel(file_path)
+    
+    # Specific columns for goods
+    goods_columns = [
+        'Bienes - Activo', 'Bienes - % Propiedad',
+        'Bienes - Propietario', 'Bienes - Valor Comercial',
+        'Bienes - Comentario', 'Bienes - Valor Comercial COP',
+        'Bienes - Valor Corregido'
+    ]
+    
+    df = df[COMMON_COLUMNS + goods_columns]
+
+    summary = df.groupby(BASE_GROUPBY).agg({
+        'Bienes - Valor Corregido': 'sum',
+        'Bienes - Activo': 'count' 
+    }).reset_index()
+
+    # Rename columns for clarity
+    summary = summary.rename(columns={
+        'Bienes - Activo': 'Cant_Bienes',
+        'Bienes - Valor Corregido': 'Total Bienes'
+    })
+
+    summary.to_excel(output_file_path, index=False) 
+    return summary
+
+def analyze_incomes(file_path, output_file_path):
+    """Analyze income data"""
+    df = pd.read_excel(file_path)
+    
+    # Specific columns for incomes
+    income_columns = [
+        'Ingresos - fkIdConcepto', 'Ingresos - Texto Concepto',
+        'Ingresos - Valor', 'Ingresos - Comentario',
+        'Ingresos - Otros', 'Ingresos - Valor COP',
+        'Texto Moneda'
+    ]
+
+    df = df[COMMON_COLUMNS + income_columns]
+    
+    # Calculate Ingresos and count occurrences
+    summary = df.groupby(BASE_GROUPBY).agg({
+        'Ingresos - Valor COP': 'sum',
+        'Ingresos - Texto Concepto': 'count'
+    }).reset_index()
+
+    # Rename columns for clarity
+    summary = summary.rename(columns={
+        'Ingresos - Texto Concepto': 'Cant_Ingresos',
+        'Ingresos - Valor COP': 'Total Ingresos'
+    })
+
+    summary.to_excel(output_file_path, index=False)
+    return summary
+
+def analyze_investments(file_path, output_file_path):
+    """Analyze investments data"""
+    df = pd.read_excel(file_path)
+    
+    # Specific columns for investments
+    invest_columns = [
+        'Inversiones - Tipo Inversión', 'Inversiones - Entidad',
+        'Inversiones - Valor', 'Inversiones - Comentario',
+        'Inversiones - Valor COP', 'Texto Moneda'
+    ]
+    
+    df = df[COMMON_COLUMNS + invest_columns]
+    
+    # Calculate total Inversiones and count occurrences
+    summary = df.groupby(BASE_GROUPBY + ['Inversiones - Tipo Inversión']).agg( 
+        {'Inversiones - Valor COP': 'sum',
+         'Inversiones - Tipo Inversión': 'count'}
+    ).rename(columns={
+        'Inversiones - Tipo Inversión': 'Cant_Inversiones',
+        'Inversiones - Valor COP': 'Total Inversiones'
+    }).reset_index()
+    
+    summary.to_excel(output_file_path, index=False)
+    return summary 
+
+def calculate_assets(banks_file, goods_file, invests_file, output_file):
+    """Calculate total assets by combining banks, goods and investments"""
+    banks = pd.read_excel(banks_file)
+    goods = pd.read_excel(goods_file)
+    invests = pd.read_excel(invests_file)
+
+    # Group investments by base columns (summing across types)
+    invests_grouped = invests.groupby(BASE_GROUPBY).agg({
+        'Total Inversiones': 'sum',
+        'Cant_Inversiones': 'sum'
+    }).reset_index()
+
+    # Merge all three dataframes
+    merged = pd.merge(goods, banks, on=BASE_GROUPBY, how='outer')
+    merged = pd.merge(merged, invests_grouped, on=BASE_GROUPBY, how='outer')
+    merged.fillna(0, inplace=True)
+
+    # Calculate total assets
+    merged['Total Activos'] = (
+        merged['Total Bienes'] + 
+        merged['Banco - Saldo COP'] + 
+        merged['Total Inversiones']
+    )
+
+    # Reorder and rename columns
+    final_columns = BASE_GROUPBY + [
+        'Total Bienes', 'Cant_Bienes',
+        'Banco - Saldo COP', 'Cant_Bancos', 'Cant_Cuentas',
+        'Total Inversiones', 'Cant_Inversiones',
+        'Total Activos'
+    ]
+    merged = merged[final_columns]
+
+    merged.to_excel(output_file, index=False)
+    return merged
+
+def calculate_net_worth(debts_file, assets_file, output_file):
+    """Calculate net worth by combining assets and debts"""
+    debts = pd.read_excel(debts_file)
+    assets = pd.read_excel(assets_file)
+
+    # Merge the summaries
+    merged = pd.merge(
+        assets, 
+        debts, 
+        on=BASE_GROUPBY, 
+        how='outer'
+    )
+    merged.fillna(0, inplace=True)
+    
+    # Calculate net worth
+    merged['Total Patrimonio'] = merged['Total Activos'] - merged['Total Pasivos']
+    
+    # Final column order
+    final_columns = BASE_GROUPBY + [
+        'Total Activos',
+        'Cant_Bienes',
+        'Cant_Bancos',
+        'Cant_Cuentas',
+        'Cant_Inversiones',
+        'Total Pasivos',
+        'Cant_Deudas',
+        'Total Patrimonio'
+    ]
+    merged = merged[final_columns]
+    
+    merged.to_excel(output_file, index=False)
+    return merged
+
+def run_all_analyses():
+    """Run all analyses in sequence with default file paths"""
+    # Individual analyses
+    bank_summary = analyze_banks(
+        'core/src/banks.xlsx',
+        'core/src/bankNets.xlsx'
+    )
+    
+    debt_summary = analyze_debts(
+        'core/src/debts.xlsx',
+        'core/src/debtNets.xlsx'
+    )
+    
+    goods_summary = analyze_goods(
+        'core/src/goods.xlsx',
+        'core/src/goodNets.xlsx'
+    )
+    
+    income_summary = analyze_incomes(
+        'core/src/incomes.xlsx',
+        'core/src/incomeNets.xlsx'
+    )
+    
+    invest_summary = analyze_investments(
+        'core/src/investments.xlsx',
+        'core/src/investNets.xlsx'
+    )
+    
+    # Combined analyses
+    assets_summary = calculate_assets(
+        'core/src/bankNets.xlsx',
+        'core/src/goodNets.xlsx',
+        'core/src/investNets.xlsx',
+        'core/src/assetNets.xlsx'
+    )
+    
+    net_worth_summary = calculate_net_worth(
+        'core/src/debtNets.xlsx',
+        'core/src/assetNets.xlsx',
+        'core/src/worthNets.xlsx'
+    )
+    
+    return {
+        'bank_summary': bank_summary,
+        'debt_summary': debt_summary,
+        'goods_summary': goods_summary,
+        'income_summary': income_summary,
+        'invest_summary': invest_summary,
+        'assets_summary': assets_summary,
+        'net_worth_summary': net_worth_summary
+    }
+
+if __name__ == '__main__':
+    # Run all analyses when script is executed
+    results = run_all_analyses()
+    print("All nets analyses completed successfully!")
+"@
+
+# Create trends.py
+Set-Content -Path "core/trends.py" -Value @"
+import pandas as pd
+
+def get_trend_symbol(value):
+    """Determine the trend symbol based on the percentage change."""
+    try:
+        value_float = float(value.strip('%')) / 100
+        if pd.isna(value_float):
+            return "➡️"
+        elif value_float > 0.1:  # more than 10% increase
+            return "📈"
+        elif value_float < -0.1:  # more than 10% decrease
+            return "📉"
+        else:
+            return "➡️"  # relatively stable
+    except Exception:
+        return "➡️"
+
+def calculate_variation(df, column):
+    """Calculate absolute and relative variations for a specific column."""
+    df = df.sort_values(by=['Usuario', 'Año Declaración'])
+    
+    absolute_col = f'{column} Var. Abs.'
+    relative_col = f'{column} Var. Rel.'
+    
+    df[absolute_col] = df.groupby('Usuario')[column].diff()
+    
+    df[relative_col] = (
+        df.groupby('Usuario')[column]
+        .ffill()
+        .pct_change(fill_method=None) * 100
+    )
+    
+    df[relative_col] = df[relative_col].apply(lambda x: f"{x:.2f}%" if not pd.isna(x) else "0.00%")
+    
+    return df
+
+def embed_trend_symbols(df, columns):
+    """Add trend symbols to variation columns."""
+    for col in columns:
+        absolute_col = f'{col} Var. Abs.'
+        relative_col = f'{col} Var. Rel.'
+        
+        if absolute_col in df.columns:
+            df[absolute_col] = df.apply(
+                lambda row: f"{row[absolute_col]:.2f} {get_trend_symbol(row[relative_col])}" 
+                if pd.notna(row[absolute_col]) else "N/A ➡️",
+                axis=1
+            )
+        
+        if relative_col in df.columns:
+            df[relative_col] = df.apply(
+                lambda row: f"{row[relative_col]} {get_trend_symbol(row[relative_col])}", 
+                axis=1
+            )
+    
+    return df
+
+def calculate_leverage(df):
+    """Calculate financial leverage."""
+    df['Apalancamiento'] = (df['Patrimonio'] / df['Activos']) * 100
+    return df
+
+def calculate_debt_level(df):
+    """Calculate debt level."""
+    df['Endeudamiento'] = (df['Pasivos'] / df['Activos']) * 100
+    return df
+
+def process_asset_data(df_assets):
+    """Process asset data with variations and trends."""
+    df_assets_grouped = df_assets.groupby(['Usuario', 'Año Declaración']).agg(
+        BancoSaldo=('Banco - Saldo COP', 'sum'),
+        Bienes=('Total Bienes', 'sum'),
+        Inversiones=('Total Inversiones', 'sum')
+    ).reset_index()
+
+    for column in ['BancoSaldo', 'Bienes', 'Inversiones']:
+        df_assets_grouped = calculate_variation(df_assets_grouped, column)
+    
+    df_assets_grouped = embed_trend_symbols(df_assets_grouped, ['BancoSaldo', 'Bienes', 'Inversiones'])
+    return df_assets_grouped
+
+def process_income_data(df_income):
+    """Process income data with variations and trends."""
+    df_income_grouped = df_income.groupby(['Usuario', 'Año Declaración']).agg(
+        Ingresos=('Total Ingresos', 'sum'),
+        Cant_Ingresos=('Cant_Ingresos', 'sum')
+    ).reset_index()
+
+    df_income_grouped = calculate_variation(df_income_grouped, 'Ingresos')
+    df_income_grouped = embed_trend_symbols(df_income_grouped, ['Ingresos'])
+    return df_income_grouped
+
+def calculate_yearly_variations(df):
+    """Calculate yearly variations for all columns."""
+    df = df.sort_values(['Usuario', 'Año Declaración'])
+    
+    columns_to_analyze = [
+        'Activos', 'Pasivos', 'Patrimonio', 
+        'Apalancamiento', 'Endeudamiento',
+        'BancoSaldo', 'Bienes', 'Inversiones', 'Ingresos',
+        'Cant_Ingresos'
+    ]
+    
+    new_columns = {}
+    
+    for column in [col for col in columns_to_analyze if col in df.columns]:
+        grouped = df.groupby('Usuario')[column]
+        
+        for year in [2021, 2022, 2023, 2024]:
+            abs_col = f'{year} {column} Var. Abs.'
+            new_columns[abs_col] = grouped.diff()
+            
+            rel_col = f'{year} {column} Var. Rel.'
+            pct_change = grouped.pct_change(fill_method=None) * 100
+            new_columns[rel_col] = pct_change.apply(
+                lambda x: f"{x:.2f}%" if not pd.isna(x) else "0.00%"
+            )
+    
+    df = pd.concat([df, pd.DataFrame(new_columns)], axis=1)
+    
+    for column in [col for col in columns_to_analyze if col in df.columns]:
+        for year in [2021, 2022, 2023, 2024]:
+            abs_col = f'{year} {column} Var. Abs.'
+            rel_col = f'{year} {column} Var. Rel.'
+            
+            if abs_col in df.columns:
+                df[abs_col] = df.apply(
+                    lambda row: f"{row[abs_col]:.2f} {get_trend_symbol(row[rel_col])}" 
+                    if pd.notna(row[abs_col]) else "N/A ➡️",
+                    axis=1
+                )
+            if rel_col in df.columns:
+                df[rel_col] = df.apply(
+                    lambda row: f"{row[rel_col]} {get_trend_symbol(row[rel_col])}", 
+                    axis=1
+                )
+    
+    return df
+
+def save_results(df, excel_filename="tables/trends/trends.xlsx", json_filename=None):
+    """Save results to Excel and optionally JSON."""
+    try:
+        df.to_excel(excel_filename, index=False)
+        print(f"Data saved to {excel_filename}")
+        
+        if json_filename:
+            df.to_json(json_filename, orient='records', indent=4, force_ascii=False)
+            print(f"Data saved to {json_filename}")
+    except Exception as e:
+        print(f"Error saving file: {e}")
+
+def main():
+    """Main function to process all data and generate analysis files."""
+    try:
+        # Process worth data
+        df_worth = pd.read_excel("core/src/worthNets.xlsx")
+        df_worth = df_worth.rename(columns={
+            'Total Activos': 'Activos',
+            'Total Pasivos': 'Pasivos',
+            'Total Patrimonio': 'Patrimonio'
+        })
+        
+        df_worth = calculate_leverage(df_worth)
+        df_worth = calculate_debt_level(df_worth)
+        
+        for column in ['Activos', 'Pasivos', 'Patrimonio', 'Apalancamiento', 'Endeudamiento']:
+            df_worth = calculate_variation(df_worth, column)
+        
+        df_worth = embed_trend_symbols(df_worth, ['Activos', 'Pasivos', 'Patrimonio', 'Apalancamiento', 'Endeudamiento'])
+        
+        # Process asset data
+        df_assets = pd.read_excel("core/src/assetNets.xlsx")
+        df_assets_processed = process_asset_data(df_assets)
+        
+        # Process income data
+        df_income = pd.read_excel("core/src/incomeNets.xlsx")
+        df_income_processed = process_income_data(df_income)
+        
+        # Merge all data
+        df_combined = pd.merge(df_worth, df_assets_processed, on=['Usuario', 'Año Declaración'], how='left')
+        df_combined = pd.merge(df_combined, df_income_processed, on=['Usuario', 'Año Declaración'], how='left')
+        
+        # Save basic trends
+        save_results(df_combined, "core/src/trends.xlsx")
+        
+        # Calculate and save yearly variations
+        df_yearly = calculate_yearly_variations(df_combined)
+        save_results(df_yearly, "core/src/overTrends.xlsx", "core/src/data.json")
+        
+    except FileNotFoundError as e:
+        print(f"Error: Required file not found - {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
+"@
+
+# Create core/conflicts.py
+Set-Content -Path "core/conflicts.py" -Value @"
+import pandas as pd
+import os
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import numbers
+
+def extract_specific_columns(input_file, output_file, custom_headers=None):
+    
+    try:
+        # Setup output directory
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        
+        # Read raw data (no automatic parsing)
+        df = pd.read_excel(input_file, header=None)
+        
+        # Column selection (first 11 + specified extras)
+        base_cols = list(range(11))  # Columns 0-10 (A-K)
+        extra_cols = [12,14,16,18,20,22,24,26,28]
+        selected_cols = [col for col in base_cols + extra_cols if col < df.shape[1]]
+        
+        # Extract data with headers
+        result = df.iloc[3:, selected_cols].copy()
+        result.columns = df.iloc[2, selected_cols].values
+        
+        # Apply custom headers if provided
+        if custom_headers is not None:
+            if len(custom_headers) != len(result.columns):
+                raise ValueError(f"Custom headers count ({len(custom_headers)}) doesn't match column count ({len(result.columns)})")
+            result.columns = custom_headers
+        
+        # Merge C,D,E,F → C (indices 2,3,4,5)
+        if all(c in selected_cols for c in [2,3,4,5]):
+            result.iloc[:, 2] = result.iloc[:, 2:6].astype(str).apply(' '.join, axis=1)
+            result.drop(result.columns[3:6], axis=1, inplace=True)
+            selected_cols = [c for c in selected_cols if c not in [3,4,5]] 
+            
+        # Capitalize "Nombre" column AFTER merging
+        if "Nombre" in result.columns:
+            result["Nombre"] = result["Nombre"].str.title()
+            
+        # Special handling for Column J (input index 9)
+        if 9 in selected_cols:
+            j_pos = selected_cols.index(9)  # Find its position in output
+            date_col = result.columns[j_pos]
+            
+            # Convert with European date format
+            result[date_col] = pd.to_datetime(
+                result[date_col],
+                dayfirst=True,
+                errors='coerce'
+            )
+            
+            # Save with Excel formatting
+            with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+                result.to_excel(writer, index=False)
+                
+                # Get the worksheet and format the date column
+                worksheet = writer.sheets['Sheet1']
+                date_col_letter = get_column_letter(j_pos + 1)
+                
+                # Apply date format to all cells in the column
+                for cell in worksheet[date_col_letter]:
+                    if cell.row == 1:  # Skip header
+                        continue
+                    cell.number_format = 'DD/MM/YYYY'
+                
+                # Auto-adjust columns
+                for idx, col in enumerate(result.columns):
+                    col_letter = get_column_letter(idx+1)
+                    worksheet.column_dimensions[col_letter].width = max(
+                        len(str(col))+2,
+                        result[col].astype(str).str.len().max()+2
+                    )
+            
+            print(f"Success! Output saved to: {output_file}")
+        
+        else:
+            print("Warning: Column J not found in selected columns")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+
+# Example usage with custom headers
+custom_headers = [
+    "ID", "# Documento", "Nombre", "1er Nombre", "1er Apellido", 
+    "2do Apellido", "Compañía", "Cargo", "Email", "Fecha de Inicio", 
+    "Q1", "Q2", "Q3", "Q4", "Q5",
+    "Q6", "Q7", "Q8", "Q9", "Q10"
+]
+
+extract_specific_columns(
+    input_file="core/src/conflictos.xlsx",
+    output_file="core/src/conflicts.xlsx",
+    custom_headers=custom_headers
+)
+"@
+
 # Create custom admin base template
 @"
 {% extends "admin/base.html" %}
@@ -1650,7 +2231,8 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
     #python manage.py runserver
     python core/passkey.py
     python core/cats.py
+    python core/nets.py
+    python core/trends.py
 }
 
 migratoDjango
-createPeriod
