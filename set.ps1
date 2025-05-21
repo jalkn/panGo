@@ -289,6 +289,47 @@ def import_protected_excel(request):
         return HttpResponseRedirect('/persons/import/')
     
     return HttpResponseRedirect('/persons/import/')
+
+def import_conflict_excel(request):
+    """View for importing conflict data from Excel files"""
+    if request.method == 'POST' and request.FILES.get('conflict_excel_file'):
+        excel_file = request.FILES['conflict_excel_file']
+        try:
+            # Save the uploaded file temporarily
+            temp_path = "core/src/conflictos.xlsx"
+            with open(temp_path, 'wb+') as destination:
+                for chunk in excel_file.chunks():
+                    destination.write(chunk)
+            
+            # Process the file using conflicts.py functionality
+            from core.conflicts import extract_specific_columns
+            import os
+            
+            custom_headers = [
+                "ID", "# Documento", "Nombre", "1er Nombre", "1er Apellido", 
+                "2do Apellido", "Compañía", "Cargo", "Email", "Fecha de Inicio", 
+                "Q1", "Q2", "Q3", "Q4", "Q5",
+                "Q6", "Q7", "Q8", "Q9", "Q10"
+            ]
+            
+            extract_specific_columns(
+                input_file=temp_path,
+                output_file="core/src/conflicts.xlsx",
+                custom_headers=custom_headers
+            )
+            
+            messages.success(request, 'Archivo de conflictos procesado exitosamente!')
+            
+            # Clean up temporary file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            
+        except Exception as e:
+            messages.error(request, f'Error procesando archivo de conflictos: {str(e)}')
+        
+        return HttpResponseRedirect('/persons/import/')
+    
+    return HttpResponseRedirect('/persons/import/')
 "@
 
     # Create urls.py for core app
@@ -302,6 +343,7 @@ urlpatterns = [
     path('persons/import/', views.import_from_excel, name='import_excel'),
     path('persons/import-protected/', views.import_protected_excel, name='import_protected_excel'),
     path('persons/export/', views.export_to_excel, name='export_excel'),
+    path('persons/import-conflicts/', views.import_conflict_excel, name='import_conflict_excel'),
 ]
 "@
 
@@ -2052,8 +2094,8 @@ body {
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/persons.html" -Encoding utf8 -Force
 
-    # Create import template
-    @"
+# Create import template
+@"
 {% extends "master.html" %}
 
 {% block title %}Importar desde Excel{% endblock %}
@@ -2064,59 +2106,92 @@ body {
 {% endblock %}
 
 {% block content %}
+<div class="row">
     <!-- Personas Import Card -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <form method="post" enctype="multipart/form-data" action="{% url 'import_excel' %}">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <input type="file" class="form-control" id="excel_file" name="excel_file" required>
-                    <div class="form-text">El archivo Excel de Personas debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
-                </div>
-                <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
-            </form>
-        </div>
-        <!-- Messages specific to Personas import -->
-        {% for message in messages %}
-            {% if 'import_excel' in message.tags %}
-            <div class="card-footer">
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_excel' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="excel_file" name="excel_file" required>
+                        <div class="form-text">El archivo Excel de Personas debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
+                    </div>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
+                </form>
             </div>
-            {% endif %}
-        {% endfor %}
+            <!-- Messages specific to Personas import -->
+            {% for message in messages %}
+                {% if 'import_excel' in message.tags %}
+                <div class="card-footer">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
     </div>
 
     <!-- Bienes y Rentas Import Card -->
-    <div class="card">
-        <div class="card-body">
-            <form method="post" enctype="multipart/form-data" action="{% url 'import_protected_excel' %}">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <input type="file" class="form-control" id="protected_excel_file" name="protected_excel_file" required>
-                    <div class="form-text">El archivo Excel de Bienes y Rentas debe incluir las columnas: </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_protected_excel' %}">
+                    {% csrf_token %}
                     <div class="mb-3">
-                        <input type="password" class="form-control" id="excel_password" name="excel_password">
-                        <div class="form-text">Ingrese la contraseña</div>
+                        <input type="file" class="form-control" id="protected_excel_file" name="protected_excel_file" required>
+                        <div class="form-text">El archivo Excel de Bienes y Rentas debe incluir las columnas: </div>
+                        <div class="mb-3">
+                            <input type="password" class="form-control" id="excel_password" name="excel_password">
+                            <div class="form-text">Ingrese la contraseña</div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
+                </form>
+            </div>
+            <!-- Messages specific to Bienes y Rentas import -->
+            {% for message in messages %}
+                {% if 'import_protected_excel' in message.tags %}
+                <div class="card-footer">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
-            </form>
+                {% endif %}
+            {% endfor %}
         </div>
-        <!-- Messages specific to Bienes y Rentas import -->
-        {% for message in messages %}
-            {% if 'import_protected_excel' in message.tags %}
-            <div class="card-footer">
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            </div>
-            {% endif %}
-        {% endfor %}
     </div>
+
+    <!-- Conflictos Import Card -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_conflict_excel' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="conflict_excel_file" name="conflict_excel_file" required>
+                        <div class="form-text">El archivo Excel de Conflictos debe tener el formato específico</div>
+                    </div>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Conflictos</button>
+                </form>
+            </div>
+            <!-- Messages specific to Conflictos import -->
+            {% for message in messages %}
+                {% if 'import_conflict_excel' in message.tags %}
+                <div class="card-footer">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/import_excel.html" -Encoding utf8
 
@@ -2228,11 +2303,12 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
 
     # Start the server
     Write-Host "🚀 Starting Django development server..." -ForegroundColor $GREEN
-    #python manage.py runserver
-    python core/passkey.py
-    python core/cats.py
-    python core/nets.py
-    python core/trends.py
+    python manage.py runserver
+    #python core/passkey.py
+    #python core/cats.py
+    #python core/nets.py
+    #python core/trends.py
+    #python core/conflicts.py
 }
 
 migratoDjango
