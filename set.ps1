@@ -237,32 +237,29 @@ def export_to_excel(request):
 def import_protected_excel(request):
     """
     View for importing data from password-protected Excel files
+    and running the full analysis pipeline
     """
     if request.method == 'POST' and request.FILES.get('protected_excel_file'):
         excel_file = request.FILES['protected_excel_file']
         password = request.POST.get('excel_password', '')
         
         try:
-            # Save the uploaded file temporarily
+            # Create necessary directories if they don't exist
+            os.makedirs('core/src', exist_ok=True)
+            
+            # 1. Save the uploaded file temporarily
             temp_path = "core/src/dataHistoricaPBI.xlsx"
             with open(temp_path, 'wb+') as destination:
                 for chunk in excel_file.chunks():
                     destination.write(chunk)
             
-            # Process the file using passKey.py functionality
+            # 2. Process the file using passKey.py functionality
             from core.passKey import remove_excel_password, add_fk_id_estado
-            import os
-            import sys
-            from io import StringIO
-            
-            # Redirect stdout to capture output
-            old_stdout = sys.stdout
-            sys.stdout = mystdout = StringIO()
             
             output_excel = "core/src/data.xlsx"
             output_json = "core/src/fk1data.json"
             
-            # Create a modified version of remove_excel_password that accepts password as parameter
+            # Modified password removal function that works with the view
             def remove_excel_password_browser(input_file, output_file, password):
                 try:
                     import msoffcrypto
@@ -284,23 +281,49 @@ def import_protected_excel(request):
                 except Exception as e:
                     return False, str(e)
             
+            # Remove password and create data.xlsx
             success, message = remove_excel_password_browser(temp_path, output_excel, password)
             
-            if success:
-                json_success = add_fk_id_estado(output_excel, output_json)
-                if json_success:
-                    messages.success(request, 'Archivo desencriptado exitosamente!')
-                else:
-                    messages.warning(request, 'Archivo desencriptado pero falló la generación del JSON')
-            else:
+            if not success:
                 messages.error(request, f'Error al procesar el archivo protegido: {message}')
+                return HttpResponseRedirect('/persons/import/')
+            
+            # 3. Add fkIdEstado and create JSON
+            json_success = add_fk_id_estado(output_excel, output_json)
+            
+            if not json_success:
+                messages.warning(request, 'Archivo desencriptado pero falló la generación del JSON')
+            
+            # 4. Run the full analysis pipeline
+            try:
+                # Import the analysis modules
+                from core.cats import run_all_analyses as run_cats_analysis
+                from core.nets import run_all_analyses as run_nets_analysis
+                from core.trends import main as run_trends_analysis
+                
+                # Ensure periodoBR.xlsx exists
+                periodo_file = "core/src/periodoBR.xlsx"
+                if not os.path.exists(periodo_file):
+                    messages.error(request, 'El archivo de periodos (periodoBR.xlsx) no existe. Por favor cargue primero el archivo de periodos.')
+                    return HttpResponseRedirect('/persons/import/')
+                
+                # Run CATS analysis (generates banks.xlsx, debts.xlsx, etc.)
+                run_cats_analysis()
+                
+                # Run NETS analysis (generates bankNets.xlsx, debtNets.xlsx, etc.)
+                run_nets_analysis()
+                
+                # Run TRENDS analysis (generates trends.xlsx, overTrends.xlsx, data.json)
+                run_trends_analysis()
+                
+                messages.success(request, 'Proceso completo! Archivo desencriptado y análisis generados exitosamente.')
+            
+            except Exception as e:
+                messages.error(request, f'Error durante el análisis de datos: {str(e)}')
             
             # Clean up temporary file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-            
-            # Restore stdout
-            sys.stdout = old_stdout
             
         except Exception as e:
             messages.error(request, f'Error importing protected file: {str(e)}')
