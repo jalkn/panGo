@@ -270,7 +270,7 @@ def import_protected_excel(request):
             if success:
                 json_success = add_fk_id_estado(output_excel, output_json)
                 if json_success:
-                    messages.success(request, 'Archivo protegido procesado exitosamente!')
+                    messages.success(request, 'Archivo desencriptado exitosamente!')
                 else:
                     messages.warning(request, 'Archivo desencriptado pero falló la generación del JSON')
             else:
@@ -1006,7 +1006,7 @@ body {
 
     # Create import template
     @"
-{% extends "master.html" %}
+{{% extends "master.html" %}
 
 {% block title %}Importar desde Excel{% endblock %}
 {% block navbar_title %}Importar Datos{% endblock %}
@@ -1016,7 +1016,8 @@ body {
 {% endblock %}
 
 {% block content %}
-    <div class="card">
+    <!-- Personas Import Card -->
+    <div class="card mb-4">
         <div class="card-body">
             <form method="post" enctype="multipart/form-data" action="{% url 'import_excel' %}">
                 {% csrf_token %}
@@ -1025,10 +1026,22 @@ body {
                     <div class="form-text">El archivo Excel de Personas debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
                 </div>
                 <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
-                <!--<a href="/" class="btn btn-custom-primary btn-lg text-start">Cancelar</a>-->
             </form>
         </div>
+        <!-- Messages specific to Personas import -->
+        {% for message in messages %}
+            {% if 'import_excel' in message.tags %}
+            <div class="card-footer">
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
     </div>
+
+    <!-- Bienes y Rentas Import Card -->
     <div class="card">
         <div class="card-body">
             <form method="post" enctype="multipart/form-data" action="{% url 'import_protected_excel' %}">
@@ -1042,19 +1055,19 @@ body {
                     </div>
                 </div>
                 <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
-                <!--<a href="/" class="btn btn-custom-primary btn-lg text-start">Cancelar</a>-->
             </form>
         </div>
-        {% if messages %}
+        <!-- Messages specific to Bienes y Rentas import -->
+        {% for message in messages %}
+            {% if 'import_protected_excel' in message.tags %}
             <div class="card-footer">
-                {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endfor %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
             </div>
-        {% endif %}
+            {% endif %}
+        {% endfor %}
     </div>
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/import_excel.html" -Encoding utf8
