@@ -58,6 +58,25 @@ from django.db.models import Q
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
+def import_period_excel(request):
+    """View for importing period data from Excel files"""
+    if request.method == 'POST' and request.FILES.get('period_excel_file'):
+        excel_file = request.FILES['period_excel_file']
+        try:
+            # Save the uploaded file to the desired location
+            temp_path = "core/src/periodoBR.xlsx"
+            with open(temp_path, 'wb+') as destination:
+                for chunk in excel_file.chunks():
+                    destination.write(chunk)
+            
+            messages.success(request, 'Archivo de periodos actualizado exitosamente!')
+        except Exception as e:
+            messages.error(request, f'Error procesando archivo de periodos: {str(e)}')
+        
+        return HttpResponseRedirect('/persons/import/')
+    
+    return HttpResponseRedirect('/persons/import/')
+
 def _apply_filters_and_sorting(queryset, request_params):
     """
     Helper function to apply filters and sorting to a queryset based on request parameters.
@@ -176,9 +195,9 @@ def import_from_excel(request):
                     }
                 )
             
-            messages.success(request, f'Carga exitosa! {len(df)} filas procesadas.')
+            messages.success(request, f'Carga exitosa! {len(df)} filas procesadas.', extra_tags='import_excel')
         except Exception as e:
-            messages.error(request, f'Error importing data: {str(e)}')
+            messages.error(request, f'Error importing data: {str(e)}', extra_tags='import_excel')
         
         return HttpResponseRedirect('/')
     
@@ -344,6 +363,7 @@ urlpatterns = [
     path('persons/import-protected/', views.import_protected_excel, name='import_protected_excel'),
     path('persons/export/', views.export_to_excel, name='export_excel'),
     path('persons/import-conflicts/', views.import_conflict_excel, name='import_conflict_excel'),
+    path('persons/import-period/', views.import_period_excel, name='import_period_excel'),
 ]
 "@
 
@@ -418,62 +438,6 @@ urlpatterns = [
     foreach ($dir in $directories) {
         New-Item -Path $dir -ItemType Directory -Force
     }
-
-# period.py
-Set-Content -Path "core/period.py" -Value @"
-from openpyxl import Workbook
-from openpyxl.styles import Font
-
-def create_excel_file():
-    # Create a new workbook and select the active worksheet
-    wb = Workbook()
-    ws = wb.active
-    
-    # Define the header row
-    headers = [
-        "Id", "Activo", "Año", "FechaFinDeclaracion", 
-        "FechaInicioDeclaracion", "Año declaracion"
-    ]
-    
-    # Write the headers to the first row and make them bold
-    for col_num, header in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col_num, value=header)
-        cell.font = Font(bold=True)
-    
-    # Data rows
-    data = [
-        [2, True, "Friday, January 01, 2021", "4/30/2022", "6/1/2021", "2,021"],
-        [6, True, "Saturday, January 01, 2022", "3/31/2023", "10/19/2022", "2,022"],
-        [7, True, "Sunday, January 01, 2023", "5/12/2024", "11/1/2023", "2,023"],
-        [8, True, "Monday, January 01, 2024", "1/1/2025", "10/2/2024", "2,024"]
-    ]
-    
-    # Write data rows
-    for row_num, row_data in enumerate(data, 2):  # Start from row 2
-        for col_num, cell_value in enumerate(row_data, 1):
-            ws.cell(row=row_num, column=col_num, value=cell_value)
-    
-    # Auto-adjust column widths
-    for column in ws.columns:
-        max_length = 0
-        column_letter = column[0].column_letter
-        for cell in column:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except:
-                pass
-        adjusted_width = (max_length + 2)
-        ws.column_dimensions[column_letter].width = adjusted_width
-    
-    # Save the workbook
-    filename = "core/src/periodoBR.xlsx"
-    wb.save(filename)
-    print(f"Excel file '{filename}' created successfully!")
-
-if __name__ == "__main__":
-    create_excel_file()
-"@
 
 #Create passkey.py
 Set-Content -Path "core/passKey.py" -Value @"
@@ -2192,6 +2156,35 @@ body {
         </div>
     </div>
 </div>
+
+<!-- New row for Periodo Import -->
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_period_excel' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="period_excel_file" name="period_excel_file" required>
+                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, Año, FechaFinDeclaracion, FechaInicioDeclaracion, Año declaracion</div>
+                    </div>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Periodos</button>
+                </form>
+            </div>
+            <!-- Messages specific to Periodos import -->
+            {% for message in messages %}
+                {% if 'import_period_excel' in message.tags %}
+                <div class="card-footer">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/import_excel.html" -Encoding utf8
 
@@ -2292,7 +2285,7 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
 "@
 
     # Run migrations
-    python core/period.py
+    #python core/period.py
     python manage.py makemigrations core
     python manage.py migrate
 
