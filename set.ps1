@@ -311,6 +311,7 @@ def import_protected_excel(request):
                 from core.cats import run_all_analyses as run_cats_analysis
                 from core.nets import run_all_analyses as run_nets_analysis
                 from core.trends import main as run_trends_analysis
+                from core.idTrends import merge_trends_data
                 
                 # Ensure periodoBR.xlsx exists
                 periodo_file = "core/src/periodoBR.xlsx"
@@ -326,6 +327,21 @@ def import_protected_excel(request):
                 
                 # Run TRENDS analysis (generates trends.xlsx, overTrends.xlsx, data.json)
                 run_trends_analysis()
+                
+                # Run idTrends analysis - merge trends.xlsx with Personas.xlsx
+                personas_file = "core/src/Personas.xlsx"
+                trends_file = "core/src/trends.xlsx"
+                idtrends_output = "core/src/idTrends.xlsx"
+                
+                if os.path.exists(personas_file) and os.path.exists(trends_file):
+                    merge_trends_data(
+                        personas_file=personas_file,
+                        trends_file=trends_file,
+                        output_file=idtrends_output
+                    )
+                    messages.success(request, 'Análisis completado: Datos de tendencias fusionados con personas.')
+                else:
+                    messages.warning(request, 'Análisis completado pero no se pudo fusionar tendencias con personas (archivos faltantes).')
                 
                 messages.success(request, 'Proceso completo! Archivo desencriptado y análisis generados exitosamente.')
             
@@ -347,6 +363,7 @@ def import_protected_excel(request):
         return HttpResponseRedirect('/persons/import/')
     
     return HttpResponseRedirect('/persons/import/')
+
 
 def import_conflict_excel(request):
     """View for importing conflict data from Excel files"""
@@ -2319,7 +2336,32 @@ body {
         </div>
     </div>
 
-    <!-- Bienes y Rentas Import Card -->
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_excel' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="excel_file" name="excel_file" required>
+                        <div class="form-text">El archivo Excel de Personas debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
+                    </div>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
+                </form>
+            </div>
+            <!-- Messages specific to Personas import -->
+            {% for message in messages %}
+                {% if 'import_excel' in message.tags %}
+                <div class="card-footer">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
@@ -2350,7 +2392,9 @@ body {
         </div>
     </div>
 
-    <!-- Conflictos Import Card -->
+</div>
+
+<div class="row">
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
@@ -2366,36 +2410,6 @@ body {
             <!-- Messages specific to Conflictos import -->
             {% for message in messages %}
                 {% if 'import_conflict_excel' in message.tags %}
-                <div class="card-footer">
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                </div>
-                {% endif %}
-            {% endfor %}
-        </div>
-    </div>
-</div>
-
-<!-- New row for Periodo Import -->
-<div class="row">
-    <!-- Personas Import Card -->
-    <div class="col-md-4 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'import_excel' %}">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <input type="file" class="form-control" id="excel_file" name="excel_file" required>
-                        <div class="form-text">El archivo Excel de Personas debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
-                    </div>
-                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
-                </form>
-            </div>
-            <!-- Messages specific to Personas import -->
-            {% for message in messages %}
-                {% if 'import_excel' in message.tags %}
                 <div class="card-footer">
                     <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
                         {{ message }}
@@ -2463,7 +2477,7 @@ body {
                     <th>Por revisar:</th>
                     <td>
                         {% if myperson.revisar %}
-                            <span class="badge bg-warning text-dark">Sí</span>
+                            <span class="badge bg-warning text-dark">Si</span>
                         {% else %}
                             <span class="badge bg-secondary">No</span>
                         {% endif %}
