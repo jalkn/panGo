@@ -4,10 +4,10 @@ Dajngo framework to analyze a financial historical data.
 
 ## 1. Preparation
 
-Execute the main script `run.ps1`. This script installs the dependencies, creates the analysis scripts, and opens the analysis environment in your browser.
+Execute the main script `set.ps1`. This script installs the dependencies, creates the analysis scripts, and opens the analysis environment in your browser.
 
 ```powershell
-.\run.ps1
+.\set.ps1
 ```
 
 ## 2. Analysis Execution and Data Visualization
@@ -29,39 +29,47 @@ python manage.py runserver
 
 ## 3. Results
 
-After "Analyze File", the `tables/` folder will also contain the analysis results in Excel files, organized in the subfolders `cats/`, `nets/`, and `trends/`. The resulting structure will be similar to the following:     
+After "Analyze File", the `core/src/` folder will contain the analysis results in Excel files. The resulting structure will be similar to the following:     
 
 ```
-arpa/
-├── models/
-│   ├── passKey.py
-│   ├── server.py
-│   ├── cats.py
-│   ├── nets.py
-│   └── trends.py
-├── src/
-│   ├── excelFile.xlsx
-│   └── data.json
-├── tables/
-│   ├── cats/
-│   ├── nets/
-│   └── trends/
-├── static/
-│   ├── css/
-│   │   ├── components/
-│   │   │   ├── buttons.css
-│   │   │   ├── forms.css
-│   │   │   ├── modal.css
-│   │   │   ├── navbar.css
-│   │   │   ├── table.css
-│   │   │   └── tabs.css
-│   │   ├── base.css
-│   │   ├── layout.css
-│   │   ├── theme.css
-│   │   └── utilities.css
-│   └── js/
-├── favicon.png
-├── index.html
-├── .gitignore
-├── README.md
-└── run.ps1
+arpa/                      # Django project root
+├── arpa/                  # Project configuration
+│   ├── __init__.py
+│   ├── asgi.py
+│   ├── settings.py        # Modified with core app and static files
+│   ├── urls.py            # Configured with core URLs
+│   └── wsgi.py
+│
+├── core/                  # Main app
+│   ├── migrations/        
+│   ├── static/            # Static files
+│   │   └── core/
+│   │       └── css/
+│   │           └── style.css
+│   │
+│   ├── templates/         # HTML templates
+│   │   ├── admin/
+│   │   │   └── base_site.html
+│   │   ├── details.html
+│   │   ├── import_excel.html
+│   │   ├── master.html
+│   │   └── persons.html
+│   │
+│   ├── src/               # Data storage
+│   │
+│   ├── admin.py           # Custom admin config
+│   ├── apps.py
+│   ├── cats.py            # Categories analysis
+│   ├── conflicts.py       # Conflict data processor
+│   ├── idTrends.py        # Trends analysis
+│   ├── inTrends.py        # Trends with conflicts
+│   ├── models.py          # Person model
+│   ├── nets.py            # Net analysis
+│   ├── passKey.py         # Excel password handler
+│   ├── trends.py          # Trend analysis
+│   ├── urls.py            # App URLs
+│   └── views.py           # All view functions
+│
+├── manage.py
+└── db.sqlite3        
+```     
