@@ -164,6 +164,54 @@ def details(request, cedula):
     myperson = Person.objects.get(cedula=cedula)
     return render(request, 'details.html', {'myperson': myperson})
 
+def get_analysis_results():
+    """Helper function to get analysis results from generated files"""
+    import os
+    from datetime import datetime
+    from pathlib import Path
+    
+    analysis_files = [
+        {'filename': 'Personas.xlsx', 'path': 'core/src/Personas.xlsx'},
+        {'filename': 'periodoBR.xlsx', 'path': 'core/src/periodoBR.xlsx'},
+        {'filename': 'banks.xlsx', 'path': 'core/src/banks.xlsx'},
+        {'filename': 'debts.xlsx', 'path': 'core/src/debts.xlsx'},
+        {'filename': 'goods.xlsx', 'path': 'core/src/goods.xlsx'},
+        {'filename': 'incomes.xlsx', 'path': 'core/src/incomes.xlsx'},
+        {'filename': 'investments.xlsx', 'path': 'core/src/investments.xlsx'},
+        {'filename': 'trends.xlsx', 'path': 'core/src/trends.xlsx'},
+        {'filename': 'idTrends.xlsx', 'path': 'core/src/idTrends.xlsx'},
+        {'filename': 'conflicts.xlsx', 'path': 'core/src/conflicts.xlsx'},
+    ]
+    
+    results = []
+    
+    for file_info in analysis_files:
+        file_path = Path(file_info['path'])
+        result = {
+            'filename': file_info['filename'],
+            'status': 'pendiente',
+            'last_updated': None,
+            'records': None
+        }
+        
+        if file_path.exists():
+            result['status'] = 'success'
+            result['last_updated'] = datetime.fromtimestamp(file_path.stat().st_mtime)
+            
+            try:
+                # Try to count records in Excel files
+                if str(file_path).endswith('.xlsx'):
+                    import pandas as pd
+                    df = pd.read_excel(file_path)
+                    result['records'] = len(df)
+            except Exception as e:
+                result['status'] = 'error'
+                result['error'] = str(e)
+        
+        results.append(result)
+    
+    return results
+
 def import_from_excel(request):
     """
     View for importing data from Excel files
@@ -210,9 +258,13 @@ def import_from_excel(request):
         except Exception as e:
             messages.error(request, f'Error importing data: {str(e)}', extra_tags='import_excel')
         
-        return HttpResponseRedirect('/')
+        return HttpResponseRedirect('/persons/import/')  # Changed from '/' to '/persons/import/'
     
-    return render(request, 'import_excel.html')
+    # For GET requests, show the form with analysis results
+    analysis_results = get_analysis_results()
+    return render(request, 'import_excel.html', {
+        'analysis_results': analysis_results
+    })
 
 def export_to_excel(request):
     """
@@ -2391,7 +2443,6 @@ body {
             {% endfor %}
         </div>
     </div>
-
 </div>
 
 <div class="row">
@@ -2418,6 +2469,61 @@ body {
                 </div>
                 {% endif %}
             {% endfor %}
+        </div>
+    </div>
+
+    <!-- Analysis Results -->
+    <div class="col-md-8 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Resultados del Análisis</h5>
+            </div>
+            <div class="card-body">
+                {% if analysis_results %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Archivo Generado</th>
+                                <th>Registros</th>
+                                <th>Estado</th>
+                                <th>Última Actualización</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in analysis_results %}
+                            <tr>
+                                <td>{{ result.filename }}</td>
+                                <td>{{ result.records|default:"-" }}</td>
+                                <td>
+                                    <span class="badge bg-{% if result.status == 'success' %}success{% else %}secondary{% endif %}"> 
+                                        {% if result.status == 'success' %}
+                                            Exitoso
+                                        {% elif result.status == 'pending' %}
+                                            Pendiente  {# Translate 'pending' here #}
+                                        {% elif result.status == 'failed' %}
+                                            Fallido  {# Translate 'failed' here #}
+                                        {% else %}
+                                            {{ result.status|capfirst }}  {# Fallback to original value #}
+                                        {% endif %}
+                                    </span>
+                                </td>
+                                <td>{{ result.last_updated|date:"d/m/Y H:i" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No hay resultados de análisis disponibles</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">Los archivos se procesan en: core/src/</small>
+            </div>
         </div>
     </div>
 </div>
