@@ -17,7 +17,7 @@ Execute the main script `set.ps1`. This script installs the dependencies, create
 ```
 python manage.py runserver
 ```
-2. Load the excel file by clicking on "Load Excel File", enter the password, and generate the table by clicking "Analyze File". The browser will display the data.
+2. Click on import data and import your excel file data.
 
 3. To filter the data:
 
