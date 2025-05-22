@@ -57,6 +57,9 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
+import os
+import sys
+from io import StringIO
 
 def import_period_excel(request):
     """View for importing period data from Excel files"""
@@ -168,7 +171,15 @@ def import_from_excel(request):
     if request.method == 'POST' and request.FILES.get('excel_file'):
         excel_file = request.FILES['excel_file']
         try:
-            df = pd.read_excel(excel_file)
+            # Save the uploaded file to core/src/Personas.xlsx
+            personas_path = "core/src/Personas.xlsx"
+            os.makedirs(os.path.dirname(personas_path), exist_ok=True)
+            with open(personas_path, 'wb+') as destination:
+                for chunk in excel_file.chunks():
+                    destination.write(chunk)
+            
+            # Process the data from the saved file
+            df = pd.read_excel(personas_path)
             
             column_mapping = {
                 'Cedula': 'cedula',
@@ -353,7 +364,7 @@ def import_conflict_excel(request):
             import os
             
             custom_headers = [
-                "ID", "# Documento", "Nombre", "1er Nombre", "1er Apellido", 
+                "ID", "Cedula", "Nombre", "1er Nombre", "1er Apellido", 
                 "2do Apellido", "Compañía", "Cargo", "Email", "Fecha de Inicio", 
                 "Q1", "Q2", "Q3", "Q4", "Q5",
                 "Q6", "Q7", "Q8", "Q9", "Q10"
@@ -1533,6 +1544,189 @@ if __name__ == "__main__":
     main()
 "@
 
+# Create core/idTrends.py
+Set-Content -Path "core/idTrends.py" -Value @"
+import pandas as pd
+from pathlib import Path
+
+def merge_trends_data(personas_file, trends_file, output_file):
+    """
+    Merge trends data with personas data:
+    - Keeps all records from trends.xlsx
+    - Ensures only 'Compania' column exists (removes 'Compañía')
+    - Adds 'Cedula' from Personas.xlsx at the beginning
+    - Matches on 'Id' (Personas) with 'Usuario' (trends)
+    """
+    try:
+        # Create output directory if needed
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+        
+        # Read both files
+        df_personas = pd.read_excel(personas_file, engine='openpyxl')
+        df_trends = pd.read_excel(trends_file, engine='openpyxl')
+        
+        # Select only the columns we need from personas
+        persona_columns = ['Id', 'Cedula', 'Compania', 'CARGO']
+        df_personas_subset = df_personas[persona_columns]
+        
+        # Perform left join (keep all trends records)
+        merged_df = pd.merge(
+            left=df_trends,
+            right=df_personas_subset,
+            how='left',
+            left_on='Usuario',
+            right_on='Id'
+        )
+        
+        # Drop the Id column from the merge (we only needed it for matching)
+        merged_df = merged_df.drop(columns=['Id'])
+        
+        # Handle Compañía/Compania columns - ensure we only have 'Compania'
+        if 'Compañía' in merged_df.columns:
+            # If both exist, use Compania from personas and drop Compañía
+            if 'Compania' in merged_df.columns:
+                merged_df = merged_df.drop(columns=['Compañía'])
+            else:
+                # Just rename Compañía to Compania
+                merged_df = merged_df.rename(columns={'Compañía': 'Compania'})
+        
+        # Handle Cargo columns
+        if 'Cargo' in merged_df.columns and 'CARGO' in merged_df.columns:
+            merged_df['Cargo'] = merged_df['CARGO'].combine_first(merged_df['Cargo'])
+            merged_df = merged_df.drop(columns=['CARGO'])
+        elif 'CARGO' in merged_df.columns:
+            merged_df = merged_df.rename(columns={'CARGO': 'Cargo'})
+        
+        # Reorder columns to put Cedula first
+        cols = ['Cedula'] + [col for col in merged_df.columns if col != 'Cedula']
+        merged_df = merged_df[cols]
+        
+        # Ensure the column order matches your desired output
+        desired_columns = [
+            'Cedula', 'Usuario', 'Nombre', 'Compania', 'Cargo', 'fkIdPeriodo', 
+            'Año Declaración', 'Año Creación', 'Activos', 'Cant_Bienes', 
+            'Cant_Bancos', 'Cant_Cuentas', 'Cant_Inversiones', 'Pasivos', 
+            'Cant_Deudas', 'Patrimonio', 'Apalancamiento', 'Endeudamiento', 
+            'Activos Var. Abs.', 'Activos Var. Rel.', 'Pasivos Var. Abs.', 
+            'Pasivos Var. Rel.', 'Patrimonio Var. Abs.', 'Patrimonio Var. Rel.', 
+            'Apalancamiento Var. Abs.', 'Apalancamiento Var. Rel.', 
+            'Endeudamiento Var. Abs.', 'Endeudamiento Var. Rel.', 'BancoSaldo', 
+            'Bienes', 'Inversiones', 'BancoSaldo Var. Abs.', 'BancoSaldo Var. Rel.', 
+            'Bienes Var. Abs.', 'Bienes Var. Rel.', 'Inversiones Var. Abs.', 
+            'Inversiones Var. Rel.', 'Ingresos', 'Cant_Ingresos', 
+            'Ingresos Var. Abs.', 'Ingresos Var. Rel.'
+        ]
+        
+        # Keep only columns that exist in the dataframe and are in desired_columns
+        final_columns = [col for col in desired_columns if col in merged_df.columns]
+        # Add any remaining columns not in desired_columns (except Compañía)
+        remaining_columns = [col for col in merged_df.columns 
+                           if col not in desired_columns and col != 'Compañía']
+        merged_df = merged_df[final_columns + remaining_columns]
+        
+        # Save to Excel
+        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+            merged_df.to_excel(writer, index=False)
+            
+        print(f"Successfully merged files:\n"
+              f"Personas file: {personas_file}\n"
+              f"Trends file: {trends_file}\n"
+              f"Output: {output_file}\n"
+              f"Total records: {len(merged_df)}\n"
+              f"Records with matched Cedula: {merged_df['Cedula'].notna().sum()}")
+        
+    except Exception as e:
+        print(f"Error merging files: {str(e)}")
+        raise
+
+if __name__ == "__main__":
+    # Configuration
+    CONFIG = {
+        'personas_file': "core/src/Personas.xlsx",      # Personas data file
+        'trends_file': "core/src/trends.xlsx",  # Trends data file
+        'output_file': "core/src/idTrends.xlsx"      # Output file
+    }
+    
+    # Run merging
+    merge_trends_data(
+        personas_file=CONFIG['personas_file'],
+        trends_file=CONFIG['trends_file'],
+        output_file=CONFIG['output_file']
+    )
+"@
+
+# Create core/inTrends.py -merge trends with conflictos
+Set-Content -Path "core/inTrends.py" -Value @"
+import pandas as pd
+from pathlib import Path
+
+def merge_conflicts_data(idtrends_file, conflicts_file, output_file):
+    """
+    Merge idTrends data with conflicts data:
+    - Keeps all records from idTrends.xlsx
+    - Adds only specified columns from conflicts.xlsx
+    - Matches on 'Cedula' (idTrends) with 'Cedula' (conflicts)
+    """
+    try:
+        # Create output directory if needed
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+        
+        # Read both files
+        df_idtrends = pd.read_excel(idtrends_file, engine='openpyxl')
+        df_conflicts = pd.read_excel(conflicts_file, engine='openpyxl')
+        
+        # Convert both key columns to string type to ensure consistent merging
+        df_idtrends['Cedula'] = df_idtrends['Cedula'].astype(str)
+        df_conflicts['Cedula'] = df_conflicts['Cedula'].astype(str)
+        
+        # Columns to keep from conflicts file
+        conflicts_columns_to_keep = [
+            'Cedula', 
+            'Fecha de Inicio', 
+            'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 
+            'Q6', 'Q7', 'Q8', 'Q9', 'Q10'
+        ]
+        
+        # Perform left join (keep all idTrends records)
+        merged_df = pd.merge(
+            left=df_idtrends,
+            right=df_conflicts[conflicts_columns_to_keep],
+            how='left',
+            left_on='Cedula',
+            right_on='Cedula'
+        )
+        
+        # Save to Excel
+        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+            merged_df.to_excel(writer, index=False)
+            
+        print(f"Successfully merged files:\n"
+              f"idTrends file: {idtrends_file}\n"
+              f"Conflicts file: {conflicts_file}\n"
+              f"Output: {output_file}\n"
+              f"Total records: {len(merged_df)}\n"
+              f"Records with matched conflicts data: {merged_df['Fecha de Inicio'].notna().sum()}")
+        
+    except Exception as e:
+        print(f"Error merging files: {str(e)}")
+        raise
+
+if __name__ == "__main__":
+    # Configuration
+    CONFIG = {
+        'idtrends_file': "core/src/idTrends.xlsx",  # idTrends data file
+        'conflicts_file': "core/src/conflicts.xlsx",  # Conflicts data file
+        'output_file': "core/src/inTrends.xlsx"  # Output file
+    }
+    
+    # Run merging
+    merge_conflicts_data(
+        idtrends_file=CONFIG['idtrends_file'],
+        conflicts_file=CONFIG['conflicts_file'],
+        output_file=CONFIG['output_file']
+    )
+"@
+
 # Create core/conflicts.py
 Set-Content -Path "core/conflicts.py" -Value @"
 import pandas as pd
@@ -1618,7 +1812,7 @@ def extract_specific_columns(input_file, output_file, custom_headers=None):
 
 # Example usage with custom headers
 custom_headers = [
-    "ID", "# Documento", "Nombre", "1er Nombre", "1er Apellido", 
+    "ID", "Cedula", "Nombre", "1er Nombre", "1er Apellido", 
     "2do Apellido", "Compañía", "Cargo", "Email", "Fecha de Inicio", 
     "Q1", "Q2", "Q3", "Q4", "Q5",
     "Q6", "Q7", "Q8", "Q9", "Q10"
@@ -2313,7 +2507,6 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
 "@
 
     # Run migrations
-    #python core/period.py
     python manage.py makemigrations core
     python manage.py migrate
 
@@ -2325,11 +2518,7 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
     # Start the server
     Write-Host "🚀 Starting Django development server..." -ForegroundColor $GREEN
     python manage.py runserver
-    #python core/passkey.py
-    #python core/cats.py
-    #python core/nets.py
-    #python core/trends.py
-    #python core/conflicts.py
+
 }
 
 migratoDjango
