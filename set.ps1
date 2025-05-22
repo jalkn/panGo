@@ -321,9 +321,14 @@ def import_protected_excel(request):
             except Exception as e:
                 messages.error(request, f'Error durante el análisis de datos: {str(e)}')
             
-            # Clean up temporary file
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+            # Clean up temporary files
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                if os.path.exists(output_excel):  # Delete data.xlsx after analysis
+                    os.remove(output_excel)
+            except Exception as e:
+                messages.warning(request, f'Advertencia: No se pudieron eliminar algunos archivos temporales: {str(e)}')
             
         except Exception as e:
             messages.error(request, f'Error importing protected file: {str(e)}')
@@ -2094,22 +2099,21 @@ body {
 
 {% block content %}
 <div class="row">
-    <!-- Personas Import Card -->
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'import_excel' %}">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_period_excel' %}">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <input type="file" class="form-control" id="excel_file" name="excel_file" required>
-                        <div class="form-text">El archivo Excel de Personas debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
+                        <input type="file" class="form-control" id="period_excel_file" name="period_excel_file" required>
+                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, Año, FechaFinDeclaracion, FechaInicioDeclaracion, Año declaracion</div>
                     </div>
-                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Periodos</button>
                 </form>
             </div>
-            <!-- Messages specific to Personas import -->
+            <!-- Messages specific to Periodos import -->
             {% for message in messages %}
-                {% if 'import_excel' in message.tags %}
+                {% if 'import_period_excel' in message.tags %}
                 <div class="card-footer">
                     <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
                         {{ message }}
@@ -2182,21 +2186,22 @@ body {
 
 <!-- New row for Periodo Import -->
 <div class="row">
+    <!-- Personas Import Card -->
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'import_period_excel' %}">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_excel' %}">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <input type="file" class="form-control" id="period_excel_file" name="period_excel_file" required>
-                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, Año, FechaFinDeclaracion, FechaInicioDeclaracion, Año declaracion</div>
+                        <input type="file" class="form-control" id="excel_file" name="excel_file" required>
+                        <div class="form-text">El archivo Excel de Personas debe incluir las columnas: Id, NOMBRE COMPLETO, CARGO, Cedula, Correo, Compania, Estado</div>
                     </div>
-                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Periodos</button>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
                 </form>
             </div>
-            <!-- Messages specific to Periodos import -->
+            <!-- Messages specific to Personas import -->
             {% for message in messages %}
-                {% if 'import_period_excel' in message.tags %}
+                {% if 'import_excel' in message.tags %}
                 <div class="card-footer">
                     <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
                         {{ message }}
