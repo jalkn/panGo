@@ -173,6 +173,7 @@ def get_analysis_results():
     analysis_files = [
         {'filename': 'Personas.xlsx', 'path': 'core/src/Personas.xlsx'},
         {'filename': 'periodoBR.xlsx', 'path': 'core/src/periodoBR.xlsx'},
+        {'filename': 'conflicts.xlsx', 'path': 'core/src/conflicts.xlsx'},
         {'filename': 'banks.xlsx', 'path': 'core/src/banks.xlsx'},
         {'filename': 'debts.xlsx', 'path': 'core/src/debts.xlsx'},
         {'filename': 'goods.xlsx', 'path': 'core/src/goods.xlsx'},
@@ -180,7 +181,7 @@ def get_analysis_results():
         {'filename': 'investments.xlsx', 'path': 'core/src/investments.xlsx'},
         {'filename': 'trends.xlsx', 'path': 'core/src/trends.xlsx'},
         {'filename': 'idTrends.xlsx', 'path': 'core/src/idTrends.xlsx'},
-        {'filename': 'conflicts.xlsx', 'path': 'core/src/conflicts.xlsx'},
+        {'filename': 'inTrends.xlsx', 'path': 'core/src/inTrends.xlsx'},  
     ]
     
     results = []
@@ -364,6 +365,7 @@ def import_protected_excel(request):
                 from core.nets import run_all_analyses as run_nets_analysis
                 from core.trends import main as run_trends_analysis
                 from core.idTrends import merge_trends_data
+                from core.inTrends import merge_conflicts_data  # Add this import
                 
                 # Ensure periodoBR.xlsx exists
                 periodo_file = "core/src/periodoBR.xlsx"
@@ -394,6 +396,20 @@ def import_protected_excel(request):
                     messages.success(request, 'Análisis completado: Datos de tendencias fusionados con personas.')
                 else:
                     messages.warning(request, 'Análisis completado pero no se pudo fusionar tendencias con personas (archivos faltantes).')
+                
+                # NEW: Run inTrends analysis - merge idTrends.xlsx with conflicts.xlsx
+                conflicts_file = "core/src/conflicts.xlsx"
+                intrends_output = "core/src/inTrends.xlsx"
+                
+                if os.path.exists(idtrends_output) and os.path.exists(conflicts_file):
+                    merge_conflicts_data(
+                        idtrends_file=idtrends_output,
+                        conflicts_file=conflicts_file,
+                        output_file=intrends_output
+                    )
+                    messages.success(request, 'Análisis completado: Datos de conflictos fusionados con tendencias.')
+                else:
+                    messages.warning(request, 'Análisis completado pero no se pudo fusionar conflictos con tendencias (archivos faltantes).')
                 
                 messages.success(request, 'Proceso completo! Archivo desencriptado y análisis generados exitosamente.')
             
@@ -1554,6 +1570,24 @@ def calculate_yearly_variations(df):
     
     return df
 
+# Add this function to trends.py
+def calculate_sudden_wealth_increase(df):
+    """Calculate sudden wealth increase rate (Aum. Pat. Subito)"""
+    df = df.sort_values(['Usuario', 'Año Declaración'])
+    
+    # Calculate total wealth (Activo + Patrimonio)
+    df['Abundancia'] = df['Activos'] + df['Patrimonio']
+    
+    # Calculate year-to-year change
+    df['Aum. Pat. Subito'] = df.groupby('Usuario')['Abundancia'].pct_change(fill_method=None) * 100
+    
+    # Format as percentage with trend symbol
+    df['Aum. Pat. Subito'] = df['Aum. Pat. Subito'].apply(
+        lambda x: f"{x:.2f}% {get_trend_symbol(f'{x}%')}" if not pd.isna(x) else "N/A ➡️"
+    )
+    
+    return df
+
 def save_results(df, excel_filename="tables/trends/trends.xlsx", json_filename=None):
     """Save results to Excel and optionally JSON."""
     try:
@@ -1566,6 +1600,7 @@ def save_results(df, excel_filename="tables/trends/trends.xlsx", json_filename=N
     except Exception as e:
         print(f"Error saving file: {e}")
 
+# Then modify the main() function to include this calculation:
 def main():
     """Main function to process all data and generate analysis files."""
     try:
@@ -1579,6 +1614,7 @@ def main():
         
         df_worth = calculate_leverage(df_worth)
         df_worth = calculate_debt_level(df_worth)
+        df_worth = calculate_sudden_wealth_increase(df_worth)  # Add this line
         
         for column in ['Activos', 'Pasivos', 'Patrimonio', 'Apalancamiento', 'Endeudamiento']:
             df_worth = calculate_variation(df_worth, column)
@@ -1623,7 +1659,7 @@ def merge_trends_data(personas_file, trends_file, output_file):
     Merge trends data with personas data:
     - Keeps all records from trends.xlsx
     - Ensures only 'Compania' column exists (removes 'Compañía')
-    - Adds 'Cedula' from Personas.xlsx at the beginning
+    - Adds 'Cedula' and 'Estado' from Personas.xlsx at the beginning
     - Matches on 'Id' (Personas) with 'Usuario' (trends)
     """
     try:
@@ -1635,7 +1671,7 @@ def merge_trends_data(personas_file, trends_file, output_file):
         df_trends = pd.read_excel(trends_file, engine='openpyxl')
         
         # Select only the columns we need from personas
-        persona_columns = ['Id', 'Cedula', 'Compania', 'CARGO']
+        persona_columns = ['Id', 'Cedula', 'Compania', 'CARGO', 'Estado']  # Added 'Estado'
         df_personas_subset = df_personas[persona_columns]
         
         # Perform left join (keep all trends records)
@@ -1666,19 +1702,19 @@ def merge_trends_data(personas_file, trends_file, output_file):
         elif 'CARGO' in merged_df.columns:
             merged_df = merged_df.rename(columns={'CARGO': 'Cargo'})
         
-        # Reorder columns to put Cedula first
-        cols = ['Cedula'] + [col for col in merged_df.columns if col != 'Cedula']
+        # Reorder columns to put Cedula and Estado first
+        cols = ['Cedula', 'Estado'] + [col for col in merged_df.columns if col not in ['Cedula', 'Estado']]
         merged_df = merged_df[cols]
         
         # Ensure the column order matches your desired output
         desired_columns = [
-            'Cedula', 'Usuario', 'Nombre', 'Compania', 'Cargo', 'fkIdPeriodo', 
+            'Cedula', 'Estado', 'Usuario', 'Nombre', 'Compania', 'Cargo', 'fkIdPeriodo', 
             'Año Declaración', 'Año Creación', 'Activos', 'Cant_Bienes', 
             'Cant_Bancos', 'Cant_Cuentas', 'Cant_Inversiones', 'Pasivos', 
-            'Cant_Deudas', 'Patrimonio', 'Apalancamiento', 'Endeudamiento', 
-            'Activos Var. Abs.', 'Activos Var. Rel.', 'Pasivos Var. Abs.', 
-            'Pasivos Var. Rel.', 'Patrimonio Var. Abs.', 'Patrimonio Var. Rel.', 
-            'Apalancamiento Var. Abs.', 'Apalancamiento Var. Rel.', 
+            'Cant_Deudas', 'Patrimonio', 'Apalancamiento', 'Endeudamiento',
+            'Aum. Pat. Subito', 'Activos Var. Abs.', 'Activos Var. Rel.', 
+            'Pasivos Var. Abs.', 'Pasivos Var. Rel.', 'Patrimonio Var. Abs.', 
+            'Patrimonio Var. Rel.', 'Apalancamiento Var. Abs.', 'Apalancamiento Var. Rel.', 
             'Endeudamiento Var. Abs.', 'Endeudamiento Var. Rel.', 'BancoSaldo', 
             'Bienes', 'Inversiones', 'BancoSaldo Var. Abs.', 'BancoSaldo Var. Rel.', 
             'Bienes Var. Abs.', 'Bienes Var. Rel.', 'Inversiones Var. Abs.', 
@@ -1734,6 +1770,7 @@ def merge_conflicts_data(idtrends_file, conflicts_file, output_file):
     Merge idTrends data with conflicts data:
     - Keeps all records from idTrends.xlsx
     - Adds only specified columns from conflicts.xlsx
+    - Preserves 'Estado' column from idTrends
     - Matches on 'Cedula' (idTrends) with 'Cedula' (conflicts)
     """
     try:
@@ -1764,6 +1801,11 @@ def merge_conflicts_data(idtrends_file, conflicts_file, output_file):
             left_on='Cedula',
             right_on='Cedula'
         )
+        
+        # Ensure Estado column is preserved near the beginning
+        if 'Estado' in merged_df.columns:
+            cols = ['Cedula', 'Estado'] + [col for col in merged_df.columns if col not in ['Cedula', 'Estado']]
+            merged_df = merged_df[cols]
         
         # Save to Excel
         with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
@@ -2369,7 +2411,7 @@ body {
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="period_excel_file" name="period_excel_file" required>
-                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, Año, FechaFinDeclaracion, FechaInicioDeclaracion, Año declaracion</div>
+                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, AÃ±o, FechaFinDeclaracion, FechaInicioDeclaracion, AÃ±o declaracion</div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Periodos</button>
                 </form>
@@ -2413,7 +2455,34 @@ body {
             {% endfor %}
         </div>
     </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_conflict_excel' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="conflict_excel_file" name="conflict_excel_file" required>
+                        <div class="form-text">'ID', 'Cedula', 'Nombre', 'Compania', 'Cargo', 'Email', 'Fecha de Inicio', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10'</div>
+                    </div>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Conflictos</button>
+                </form>
+            </div>
+            <!-- Messages specific to Conflictos import -->
+            {% for message in messages %}
+                {% if 'import_conflict_excel' in message.tags %}
+                <div class="card-footer">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
 
+<div class="row">
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
@@ -2424,7 +2493,7 @@ body {
                         <div class="form-text">El archivo Excel de Bienes y Rentas debe incluir las columnas: </div>
                         <div class="mb-3">
                             <input type="password" class="form-control" id="excel_password" name="excel_password">
-                            <div class="form-text">Ingrese la contraseña</div>
+                            <div class="form-text">Ingrese la contraseÃ±a</div>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
@@ -2443,84 +2512,66 @@ body {
             {% endfor %}
         </div>
     </div>
-</div>
-
-<div class="row">
-    <div class="col-md-4 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'import_conflict_excel' %}">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <input type="file" class="form-control" id="conflict_excel_file" name="conflict_excel_file" required>
-                        <div class="form-text">El archivo Excel de Conflictos debe tener el formato específico</div>
-                    </div>
-                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Conflictos</button>
-                </form>
-            </div>
-            <!-- Messages specific to Conflictos import -->
-            {% for message in messages %}
-                {% if 'import_conflict_excel' in message.tags %}
-                <div class="card-footer">
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                </div>
-                {% endif %}
-            {% endfor %}
-        </div>
-    </div>
 
     <!-- Analysis Results -->
     <div class="col-md-8 mb-4">
         <div class="card h-100">
             <div class="card-header bg-light">
-                <h5 class="mb-0">Resultados del Análisis</h5>
+                <h5 class="mb-0">Resultados del AnÃ¡lisis</h5>
             </div>
-            <div class="card-body">
-                {% if analysis_results %}
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Archivo Generado</th>
-                                <th>Registros</th>
-                                <th>Estado</th>
-                                <th>Última Actualización</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for result in analysis_results %}
-                            <tr>
-                                <td>{{ result.filename }}</td>
-                                <td>{{ result.records|default:"-" }}</td>
-                                <td>
-                                    <span class="badge bg-{% if result.status == 'success' %}success{% else %}secondary{% endif %}"> 
-                                        {% if result.status == 'success' %}
-                                            Exitoso
-                                        {% elif result.status == 'pending' %}
-                                            Pendiente  {# Translate 'pending' here #}
-                                        {% elif result.status == 'failed' %}
-                                            Fallido  {# Translate 'failed' here #}
-                                        {% else %}
-                                            {{ result.status|capfirst }}  {# Fallback to original value #}
+                <!-- In the analysis results table section -->
+                <div class="card-body">
+                    {% if analysis_results %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Archivo Generado</th>
+                                    <th>Registros</th>
+                                    <th>Estado</th>
+                                    <th>Última Actualización</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in analysis_results %}
+                                <tr>
+                                    <td>{{ result.filename }}</td>
+                                    <td>{{ result.records|default:"-" }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if result.status == 'success' %}success{% elif result.status == 'error' %}danger{% else %}secondary{% endif %}"> 
+                                            {% if result.status == 'success' %}
+                                                Exitoso
+                                            {% elif result.status == 'pending' %}
+                                                Pendiente
+                                            {% elif result.status == 'error' %}
+                                                Error
+                                            {% else %}
+                                                {{ result.status|capfirst }}
+                                            {% endif %}
+                                        </span>
+                                        {% if result.status == 'error' and result.error %}
+                                        <small class="text-muted d-block">{{ result.error }}</small>
                                         {% endif %}
-                                    </span>
-                                </td>
-                                <td>{{ result.last_updated|date:"d/m/Y H:i" }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                    </td>
+                                    <td>
+                                        {% if result.last_updated %}
+                                        {{ result.last_updated|date:"d/m/Y H:i" }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No hay resultados de análisis disponibles</p>
+                    </div>
+                    {% endif %}
                 </div>
-                {% else %}
-                <div class="text-center py-4">
-                    <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                    <p class="text-muted">No hay resultados de análisis disponibles</p>
-                </div>
-                {% endif %}
-            </div>
             <div class="card-footer">
                 <small class="text-muted">Los archivos se procesan en: core/src/</small>
             </div>
