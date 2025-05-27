@@ -2911,11 +2911,11 @@ body {
                         <tbody>
                             {% for report in financial_reports %}
                             <tr>
-                                <td>{{ report.año_declaracion }}</td>
-                                <td>{{ report.patrimonio|floatformat:2|default:"-" }}</td>
-                                <td>{{ report.activos|floatformat:2|default:"-" }}</td>
-                                <td>{{ report.pasivos|floatformat:2|default:"-" }}</td>
-                                <td>{{ report.ingresos|floatformat:2|default:"-" }}</td>
+                                <td>{{ report.ano_declaracion }}</td>
+                                <td>&#36;{{ report.patrimonio|floatformat:2|default:"-" }}</td>
+                                <td>&#36;{{ report.activos|floatformat:2|default:"-" }}</td>
+                                <td>&#36;{{ report.pasivos|floatformat:2|default:"-" }}</td>
+                                <td>&#36;{{ report.ingresos|floatformat:2|default:"-" }}</td>
                                 <td>
                                     {% if report.patrimonio_var_rel %}
                                         {{ report.patrimonio_var_rel }}
@@ -2941,17 +2941,17 @@ body {
                                                 <table class="table table-sm">
                                                     <tr>
                                                         <th>Saldo Bancario:</th>
-                                                        <td>{{ report.banco_saldo|floatformat:2|default:"-" }}</td>
+                                                        <td>&#36;{{ report.banco_saldo|floatformat:2|default:"-" }}</td>
                                                         <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
                                                     </tr>
                                                     <tr>
                                                         <th>Bienes:</th>
-                                                        <td>{{ report.bienes|floatformat:2|default:"-" }}</td>
+                                                        <td>&#36;{{ report.bienes|floatformat:2|default:"-" }}</td>
                                                         <td>{{ report.bienes_var_rel|default:"-" }}</td>
                                                     </tr>
                                                     <tr>
                                                         <th>Inversiones:</th>
-                                                        <td>{{ report.inversiones|floatformat:2|default:"-" }}</td>
+                                                        <td>&#36;{{ report.inversiones|floatformat:2|default:"-" }}</td>
                                                         <td>{{ report.inversiones_var_rel|default:"-" }}</td>
                                                     </tr>
                                                 </table>
