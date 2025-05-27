@@ -179,6 +179,11 @@ def get_analysis_results():
         {'filename': 'goods.xlsx', 'path': 'core/src/goods.xlsx'},
         {'filename': 'incomes.xlsx', 'path': 'core/src/incomes.xlsx'},
         {'filename': 'investments.xlsx', 'path': 'core/src/investments.xlsx'},
+        {'filename': 'bankNets.xlsx', 'path': 'core/src/bankNets.xlsx'},
+        {'filename': 'debtNets.xlsx', 'path': 'core/src/debtNets.xlsx'},
+        {'filename': 'goodNets.xlsx', 'path': 'core/src/goodNets.xlsx'},
+        {'filename': 'incomeNets.xlsx', 'path': 'core/src/incomeNets.xlsx'},
+        {'filename': 'investNets.xlsx', 'path': 'core/src/investNets.xlsx'},
         {'filename': 'trends.xlsx', 'path': 'core/src/trends.xlsx'},
         {'filename': 'idTrends.xlsx', 'path': 'core/src/idTrends.xlsx'},
         {'filename': 'inTrends.xlsx', 'path': 'core/src/inTrends.xlsx'},  
@@ -213,9 +218,9 @@ def get_analysis_results():
     
     return results
 
-def import_from_excel(request):
+def import_persons(request):
     """
-    View for importing data from Excel files
+    View for importing only personas data from Excel files (saves to Personas.xlsx)
     """
     if request.method == 'POST' and request.FILES.get('excel_file'):
         excel_file = request.FILES['excel_file']
@@ -227,45 +232,70 @@ def import_from_excel(request):
                 for chunk in excel_file.chunks():
                     destination.write(chunk)
             
-            # Process the data from the saved file
-            df = pd.read_excel(personas_path)
-            
-            column_mapping = {
-                'Cedula': 'cedula',
-                'NOMBRE COMPLETO': 'nombre_completo',
-                'CARGO': 'cargo',
-                'Correo': 'correo',
-                'Compania': 'compania',
-                'Estado': 'estado'
-            }
-            df.rename(columns=column_mapping, inplace=True)
-            df.fillna('', inplace=True)
-            
-            for _, row in df.iterrows():
-                Person.objects.update_or_create(
-                    cedula=row['cedula'],
-                    defaults={
-                        'nombre_completo': row['nombre_completo'],
-                        'cargo': row['cargo'],
-                        'correo': row['correo'],
-                        'compania': row['compania'],
-                        'estado': row['estado'] if row['estado'] in ['Activo', 'Retirado'] else 'Activo',
-                        'revisar': row.get('revisar', False),
-                        'comments': row.get('comments', ''),
-                    }
-                )
-            
-            messages.success(request, f'Carga exitosa! {len(df)} filas procesadas.', extra_tags='import_excel')
+            messages.success(request, 'Archivo de personas guardado exitosamente!', extra_tags='import_excel')
         except Exception as e:
-            messages.error(request, f'Error importing data: {str(e)}', extra_tags='import_excel')
+            messages.error(request, f'Error guardando archivo: {str(e)}', extra_tags='import_excel')
         
-        return HttpResponseRedirect('/persons/import/')  # Changed from '/' to '/persons/import/'
+        return HttpResponseRedirect('/persons/import/')
     
     # For GET requests, show the form with analysis results
     analysis_results = get_analysis_results()
     return render(request, 'import_excel.html', {
         'analysis_results': analysis_results
     })
+
+def process_persons_data(request):
+    """
+    Process data from inTrends.xlsx and update Person model
+    """
+    try:
+        # Path to the inTrends file
+        inTrends_path = "core/src/inTrends.xlsx"
+        
+        if not os.path.exists(inTrends_path):
+            messages.error(request, 'El archivo inTrends.xlsx no existe. Por favor importe los datos primero.')
+            return HttpResponseRedirect('/persons/import/')
+            
+        # Read the inTrends file
+        df = pd.read_excel(inTrends_path)
+        
+        # Column mapping from inTrends to Person model
+        column_mapping = {
+            'Cedula': 'cedula',
+            'Nombre': 'nombre_completo',
+            'Cargo': 'cargo',
+            'Correo': 'correo',
+            'Compania': 'compania',
+            'Estado': 'estado'
+        }
+        
+        # Rename columns to match model
+        df.rename(columns=column_mapping, inplace=True)
+        
+        # Filter only columns we need
+        df = df[list(column_mapping.values())]
+        
+        # Fill empty values
+        df.fillna('', inplace=True)
+        
+        # Update or create Person records
+        for _, row in df.iterrows():
+            Person.objects.update_or_create(
+                cedula=row['cedula'],
+                defaults={
+                    'nombre_completo': row['nombre_completo'],
+                    'cargo': row['cargo'],
+                    'correo': row['correo'],
+                    'compania': row['compania'],
+                    'estado': row['estado'] if row['estado'] in ['Activo', 'Retirado'] else 'Activo',
+                }
+            )
+            
+        messages.success(request, f'Datos procesados exitosamente! {len(df)} registros actualizados.')
+    except Exception as e:
+        messages.error(request, f'Error procesando datos: {str(e)}')
+    
+    return HttpResponseRedirect('/persons/import/')
 
 def export_to_excel(request):
     """
@@ -382,6 +412,28 @@ def import_protected_excel(request):
                 # Run TRENDS analysis (generates trends.xlsx, overTrends.xlsx, data.json)
                 run_trends_analysis()
                 
+                # After running all analyses, now process the idTrends data
+                idtrends_file = "core/src/idTrends.xlsx"
+                if os.path.exists(idtrends_file):
+                    df_idtrends = pd.read_excel(idtrends_file)
+                    
+                    for _, row in df_idtrends.iterrows():
+                        if pd.notna(row['Cedula']):
+                            Person.objects.update_or_create(
+                                cedula=row['Cedula'],
+                                defaults={
+                                    'nombre_completo': row.get('Nombre', ''),
+                                    'cargo': row.get('Cargo', ''),
+                                    'correo': row.get('Correo', ''),
+                                    'compania': row.get('Compania', ''),
+                                    'estado': row.get('Estado', 'Activo'),
+                                    'revisar': False,
+                                    'comments': '',
+                                }
+                            )
+                    
+                    messages.success(request, 'Datos de personas actualizados desde idTrends.xlsx')
+                    
                 # Run idTrends analysis - merge trends.xlsx with Personas.xlsx
                 personas_file = "core/src/Personas.xlsx"
                 trends_file = "core/src/trends.xlsx"
@@ -483,7 +535,8 @@ from . import views
 urlpatterns = [
     path('', views.main, name='main'),
     path('persons/details/<str:cedula>/', views.details, name='details'),
-    path('persons/import/', views.import_from_excel, name='import_excel'),
+    path('persons/import/', views.import_persons, name='import_persons'),
+    path('persons/process/', views.process_persons_data, name='process_persons'),
     path('persons/import-protected/', views.import_protected_excel, name='import_protected_excel'),
     path('persons/export/', views.export_to_excel, name='export_excel'),
     path('persons/import-conflicts/', views.import_conflict_excel, name='import_conflict_excel'),
@@ -1659,7 +1712,7 @@ def merge_trends_data(personas_file, trends_file, output_file):
     Merge trends data with personas data:
     - Keeps all records from trends.xlsx
     - Ensures only 'Compania' column exists (removes 'Compañía')
-    - Adds 'Cedula' and 'Estado' from Personas.xlsx at the beginning
+    - Adds 'Cedula', 'Correo' and 'Estado' from Personas.xlsx at the beginning
     - Matches on 'Id' (Personas) with 'Usuario' (trends)
     """
     try:
@@ -1671,7 +1724,7 @@ def merge_trends_data(personas_file, trends_file, output_file):
         df_trends = pd.read_excel(trends_file, engine='openpyxl')
         
         # Select only the columns we need from personas
-        persona_columns = ['Id', 'Cedula', 'Compania', 'CARGO', 'Estado']  # Added 'Estado'
+        persona_columns = ['Id', 'Cedula', 'Correo', 'Compania', 'CARGO', 'Estado']
         df_personas_subset = df_personas[persona_columns]
         
         # Perform left join (keep all trends records)
@@ -1719,7 +1772,7 @@ def merge_trends_data(personas_file, trends_file, output_file):
             'Bienes', 'Inversiones', 'BancoSaldo Var. Abs.', 'BancoSaldo Var. Rel.', 
             'Bienes Var. Abs.', 'Bienes Var. Rel.', 'Inversiones Var. Abs.', 
             'Inversiones Var. Rel.', 'Ingresos', 'Cant_Ingresos', 
-            'Ingresos Var. Abs.', 'Ingresos Var. Rel.'
+            'Ingresos Var. Abs.', 'Ingresos Var. Rel.', 'Correo'
         ]
         
         # Keep only columns that exist in the dataframe and are in desired_columns
@@ -1733,12 +1786,7 @@ def merge_trends_data(personas_file, trends_file, output_file):
         with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
             merged_df.to_excel(writer, index=False)
             
-        print(f"Successfully merged files:\n"
-              f"Personas file: {personas_file}\n"
-              f"Trends file: {trends_file}\n"
-              f"Output: {output_file}\n"
-              f"Total records: {len(merged_df)}\n"
-              f"Records with matched Cedula: {merged_df['Cedula'].notna().sum()}")
+        print(f"Successfully merged files with correo data")
         
     except Exception as e:
         print(f"Error merging files: {str(e)}")
@@ -2411,7 +2459,7 @@ body {
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="period_excel_file" name="period_excel_file" required>
-                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, AÃ±o, FechaFinDeclaracion, FechaInicioDeclaracion, AÃ±o declaracion</div>
+                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, AÃƒÂ±o, FechaFinDeclaracion, FechaInicioDeclaracion, AÃƒÂ±o declaracion</div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Periodos</button>
                 </form>
@@ -2433,7 +2481,7 @@ body {
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'import_excel' %}">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_persons' %}">
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="excel_file" name="excel_file" required>
@@ -2444,7 +2492,7 @@ body {
             </div>
             <!-- Messages specific to Personas import -->
             {% for message in messages %}
-                {% if 'import_excel' in message.tags %}
+                {% if 'import_persons' in message.tags %}
                 <div class="card-footer">
                     <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
                         {{ message }}
@@ -2455,6 +2503,7 @@ body {
             {% endfor %}
         </div>
     </div>
+
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
@@ -2493,12 +2542,22 @@ body {
                         <div class="form-text">El archivo Excel de Bienes y Rentas debe incluir las columnas: </div>
                         <div class="mb-3">
                             <input type="password" class="form-control" id="excel_password" name="excel_password">
-                            <div class="form-text">Ingrese la contraseÃ±a</div>
+                            <div class="form-text">Ingrese la contraseÃƒÂ±a</div>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
                 </form>
             </div>
+            
+            <div class="card-footer">
+                <form method="post" action="{% url 'process_persons' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">
+                        Procesar Personas
+                    </button>
+                </form>
+            </div>
+
             <!-- Messages specific to Bienes y Rentas import -->
             {% for message in messages %}
                 {% if 'import_protected_excel' in message.tags %}
@@ -2517,7 +2576,7 @@ body {
     <div class="col-md-8 mb-4">
         <div class="card h-100">
             <div class="card-header bg-light">
-                <h5 class="mb-0">Resultados del AnÃ¡lisis</h5>
+                <h5 class="mb-0">Resultados del AnÃƒÂ¡lisis</h5>
             </div>
                 <!-- In the analysis results table section -->
                 <div class="card-body">
@@ -2529,7 +2588,7 @@ body {
                                     <th>Archivo Generado</th>
                                     <th>Registros</th>
                                     <th>Estado</th>
-                                    <th>Última Actualización</th>
+                                    <th>Ãšltima ActualizaciÃ³n</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2568,7 +2627,7 @@ body {
                     {% else %}
                     <div class="text-center py-4">
                         <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No hay resultados de análisis disponibles</p>
+                        <p class="text-muted">No hay resultados de anÃ¡lisis disponibles</p>
                     </div>
                     {% endif %}
                 </div>
