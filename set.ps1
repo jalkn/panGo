@@ -43,6 +43,56 @@ class Person(models.Model):
     class Meta:
         verbose_name = "Persona"
         verbose_name_plural = "Personas"
+
+class FinancialReport(models.Model):
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='financial_reports')
+    fkIdPeriodo = models.CharField(max_length=20, blank=True, null=True)
+    año_declaracion = models.CharField(max_length=20, blank=True, null=True)
+    año_creacion = models.CharField(max_length=20, blank=True, null=True)
+    activos = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    cant_bienes = models.IntegerField(blank=True, null=True)
+    cant_bancos = models.IntegerField(blank=True, null=True)
+    cant_cuentas = models.IntegerField(blank=True, null=True)
+    cant_inversiones = models.IntegerField(blank=True, null=True)
+    pasivos = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    cant_deudas = models.IntegerField(blank=True, null=True)
+    patrimonio = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    apalancamiento = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    endeudamiento = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    aum_pat_subito = models.CharField(max_length=50, blank=True, null=True)
+    activos_var_abs = models.CharField(max_length=50, blank=True, null=True)
+    activos_var_rel = models.CharField(max_length=50, blank=True, null=True)
+    pasivos_var_abs = models.CharField(max_length=50, blank=True, null=True)
+    pasivos_var_rel = models.CharField(max_length=50, blank=True, null=True)
+    patrimonio_var_abs = models.CharField(max_length=50, blank=True, null=True)
+    patrimonio_var_rel = models.CharField(max_length=50, blank=True, null=True)
+    apalancamiento_var_abs = models.CharField(max_length=50, blank=True, null=True)
+    apalancamiento_var_rel = models.CharField(max_length=50, blank=True, null=True)
+    endeudamiento_var_abs = models.CharField(max_length=50, blank=True, null=True)
+    endeudamiento_var_rel = models.CharField(max_length=50, blank=True, null=True)
+    banco_saldo = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    bienes = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    inversiones = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    banco_saldo_var_abs = models.CharField(max_length=50, blank=True, null=True)
+    banco_saldo_var_rel = models.CharField(max_length=50, blank=True, null=True)
+    bienes_var_abs = models.CharField(max_length=50, blank=True, null=True)
+    bienes_var_rel = models.CharField(max_length=50, blank=True, null=True)
+    inversiones_var_abs = models.CharField(max_length=50, blank=True, null=True)
+    inversiones_var_rel = models.CharField(max_length=50, blank=True, null=True)
+    ingresos = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    cant_ingresos = models.IntegerField(blank=True, null=True)
+    ingresos_var_abs = models.CharField(max_length=50, blank=True, null=True)
+    ingresos_var_rel = models.CharField(max_length=50, blank=True, null=True)
+    abundancia = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Reporte Financiero"
+        verbose_name_plural = "Reportes Financieros"
+        ordering = ['-año_declaracion']
+
+    def __str__(self):
+        return f"Reporte de {self.person.nombre_completo} ({self.año_declaracion})"
 "@
 
 # Create views.py with import functionality
@@ -50,7 +100,7 @@ Set-Content -Path "core/views.py" -Value @"
 from django.http import HttpResponse, HttpResponseRedirect
 from django.template import loader
 from django.shortcuts import render
-from .models import Person
+from .models import Person, FinancialReport
 import pandas as pd
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -157,12 +207,97 @@ def main(request):
     }
     return render(request, 'persons.html', context)
 
+# Add to core/views.py
+def process_financial_data():
+    """Process financial data from inTrends.xlsx and update FinancialReport model"""
+    try:
+        in_trends_path = "core/src/inTrends.xlsx"
+        
+        if not os.path.exists(in_trends_path):
+            print("inTrends.xlsx file not found")
+            return False
+            
+        df = pd.read_excel(in_trends_path)
+        
+        # Ensure Cedula is string type for comparison
+        df['Cedula'] = df['Cedula'].astype(str)
+        
+        for _, row in df.iterrows():
+            try:
+                # Find the person by cedula
+                person = Person.objects.filter(cedula=str(row['Cedula'])).first()
+                if not person:
+                    continue
+                    
+                # Create or update financial report
+                FinancialReport.objects.update_or_create(
+                    person=person,
+                    fkIdPeriodo=row.get('fkIdPeriodo'),
+                    defaults={
+                        'año_declaracion': row.get('Año Declaración'),
+                        'año_creacion': row.get('Año Creación'),
+                        'activos': row.get('Activos'),
+                        'cant_bienes': row.get('Cant_Bienes'),
+                        'cant_bancos': row.get('Cant_Bancos'),
+                        'cant_cuentas': row.get('Cant_Cuentas'),
+                        'cant_inversiones': row.get('Cant_Inversiones'),
+                        'pasivos': row.get('Pasivos'),
+                        'cant_deudas': row.get('Cant_Deudas'),
+                        'patrimonio': row.get('Patrimonio'),
+                        'apalancamiento': row.get('Apalancamiento'),
+                        'endeudamiento': row.get('Endeudamiento'),
+                        'aum_pat_subito': row.get('Aum. Pat. Subito'),
+                        'activos_var_abs': row.get('Activos Var. Abs.'),
+                        'activos_var_rel': row.get('Activos Var. Rel.'),
+                        'pasivos_var_abs': row.get('Pasivos Var. Abs.'),
+                        'pasivos_var_rel': row.get('Pasivos Var. Rel.'),
+                        'patrimonio_var_abs': row.get('Patrimonio Var. Abs.'),
+                        'patrimonio_var_rel': row.get('Patrimonio Var. Rel.'),
+                        'apalancamiento_var_abs': row.get('Apalancamiento Var. Abs.'),
+                        'apalancamiento_var_rel': row.get('Apalancamiento Var. Rel.'),
+                        'endeudamiento_var_abs': row.get('Endeudamiento Var. Abs.'),
+                        'endeudamiento_var_rel': row.get('Endeudamiento Var. Rel.'),
+                        'banco_saldo': row.get('BancoSaldo'),
+                        'bienes': row.get('Bienes'),
+                        'inversiones': row.get('Inversiones'),
+                        'banco_saldo_var_abs': row.get('BancoSaldo Var. Abs.'),
+                        'banco_saldo_var_rel': row.get('BancoSaldo Var. Rel.'),
+                        'bienes_var_abs': row.get('Bienes Var. Abs.'),
+                        'bienes_var_rel': row.get('Bienes Var. Rel.'),
+                        'inversiones_var_abs': row.get('Inversiones Var. Abs.'),
+                        'inversiones_var_rel': row.get('Inversiones Var. Rel.'),
+                        'ingresos': row.get('Ingresos'),
+                        'cant_ingresos': row.get('Cant_Ingresos'),
+                        'ingresos_var_abs': row.get('Ingresos Var. Abs.'),
+                        'ingresos_var_rel': row.get('Ingresos Var. Rel.'),
+                        'abundancia': row.get('Abundancia'),
+                    }
+                )
+            except Exception as e:
+                print(f"Error processing row for cedula {row['Cedula']}: {str(e)}")
+                continue
+                
+        return True
+        
+    except Exception as e:
+        print(f"Error processing financial data: {str(e)}")
+        return False
+
+# Update the details view to include financial reports
 def details(request, cedula):
-    """
-    View showing details for a single person
-    """
+    """View showing details for a single person"""
     myperson = Person.objects.get(cedula=cedula)
-    return render(request, 'details.html', {'myperson': myperson})
+    financial_reports = FinancialReport.objects.filter(person=myperson).order_by('-año_declaracion')
+    
+    # Process financial data if reports don't exist
+    if not financial_reports.exists():
+        process_financial_data()
+        financial_reports = FinancialReport.objects.filter(person=myperson).order_by('-año_declaracion')
+    
+    return render(request, 'details.html', {
+        'myperson': myperson,
+        'financial_reports': financial_reports
+    })
 
 def get_analysis_results():
     """Helper function to get analysis results from generated files"""
@@ -547,7 +682,7 @@ urlpatterns = [
     # Create admin.py with enhanced configuration
 Set-Content -Path "core/admin.py" -Value @" 
 from django.contrib import admin
-from .models import Person
+from .models import Person, FinancialReport
 
 def make_active(modeladmin, request, queryset):
     queryset.update(estado='Activo')
@@ -583,7 +718,45 @@ class PersonAdmin(admin.ModelAdmin):
         }),
     )
     
+class FinancialReportAdmin(admin.ModelAdmin):
+    list_display = ('person', 'año_declaracion', 'patrimonio', 'activos', 'pasivos', 'last_updated')
+    list_filter = ('año_declaracion', 'person__compania', 'person__estado')
+    search_fields = ('person__nombre_completo', 'person__cedula')
+    list_per_page = 25
+    raw_id_fields = ('person',)
+    
+    fieldsets = (
+        (None, {
+            'fields': ('person', 'año_declaracion', 'año_creacion')
+        }),
+        ('Financial Data', {
+            'fields': (
+                ('activos', 'pasivos', 'patrimonio'),
+                ('apalancamiento', 'endeudamiento'),
+                ('banco_saldo', 'bienes', 'inversiones'),
+                ('ingresos', 'cant_ingresos'),
+                ('aum_pat_subito', 'abundancia')
+            )
+        }),
+        ('Variations', {
+            'classes': ('collapse',),
+            'fields': (
+                ('activos_var_abs', 'activos_var_rel'),
+                ('pasivos_var_abs', 'pasivos_var_rel'),
+                ('patrimonio_var_abs', 'patrimonio_var_rel'),
+                ('apalancamiento_var_abs', 'apalancamiento_var_rel'),
+                ('endeudamiento_var_abs', 'endeudamiento_var_rel'),
+                ('banco_saldo_var_abs', 'banco_saldo_var_rel'),
+                ('bienes_var_abs', 'bienes_var_rel'),
+                ('inversiones_var_abs', 'inversiones_var_rel'),
+                ('ingresos_var_abs', 'ingresos_var_rel')
+            )
+        })
+    )
+
+
 admin.site.register(Person, PersonAdmin)
+admin.site.register(FinancialReport, FinancialReportAdmin)
 "@
 
 # Update project urls.py with proper admin configuration
@@ -2459,7 +2632,7 @@ body {
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="period_excel_file" name="period_excel_file" required>
-                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, AÃƒÂ±o, FechaFinDeclaracion, FechaInicioDeclaracion, AÃƒÂ±o declaracion</div>
+                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, AÃƒÆ’Ã‚Â±o, FechaFinDeclaracion, FechaInicioDeclaracion, AÃƒÆ’Ã‚Â±o declaracion</div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Periodos</button>
                 </form>
@@ -2542,7 +2715,7 @@ body {
                         <div class="form-text">El archivo Excel de Bienes y Rentas debe incluir las columnas: </div>
                         <div class="mb-3">
                             <input type="password" class="form-control" id="excel_password" name="excel_password">
-                            <div class="form-text">Ingrese la contraseÃƒÂ±a</div>
+                            <div class="form-text">Ingrese la contraseÃƒÆ’Ã‚Â±a</div>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
@@ -2576,7 +2749,7 @@ body {
     <div class="col-md-8 mb-4">
         <div class="card h-100">
             <div class="card-header bg-light">
-                <h5 class="mb-0">Resultados del AnÃƒÂ¡lisis</h5>
+                <h5 class="mb-0">Resultados del AnÃƒÆ’Ã‚Â¡lisis</h5>
             </div>
                 <!-- In the analysis results table section -->
                 <div class="card-body">
@@ -2588,7 +2761,7 @@ body {
                                     <th>Archivo Generado</th>
                                     <th>Registros</th>
                                     <th>Estado</th>
-                                    <th>Ãšltima ActualizaciÃ³n</th>
+                                    <th>ÃƒÅ¡ltima ActualizaciÃƒÂ³n</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2627,7 +2800,7 @@ body {
                     {% else %}
                     <div class="text-center py-4">
                         <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No hay resultados de anÃ¡lisis disponibles</p>
+                        <p class="text-muted">No hay resultados de anÃƒÂ¡lisis disponibles</p>
                     </div>
                     {% endif %}
                 </div>
@@ -2658,54 +2831,168 @@ body {
 {% endblock %}
 
 {% block content %}
-    <div class="card">
-        <div class="card-body">
-            <table class="table">
-                <tr>
-                    <th>ID:</th>
-                    <td>{{ myperson.cedula }}</td>
-                </tr>
-                <tr>
-                    <th>Nombre Completo:</th>
-                    <td>{{ myperson.nombre_completo }}</td>
-                </tr>
-                <tr>
-                    <th>Cargo:</th>
-                    <td>{{ myperson.cargo }}</td>
-                </tr>
-                <tr>
-                    <th>Correo:</th>
-                    <td>{{ myperson.correo }}</td>
-                </tr>
-                <tr>
-                    <th>Compania:</th>
-                    <td>{{ myperson.compania }}</td>
-                </tr>
-                <tr>
-                    <th>Estado:</th>
-                    <td>
-                        <span class="badge bg-{% if myperson.estado == 'Activo' %}success{% else %}danger{% endif %}">
-                            {{ myperson.estado }}
-                        </span>
-                    </td>
-                </tr>
-                <tr>
-                    <th>Por revisar:</th>
-                    <td>
-                        {% if myperson.revisar %}
-                            <span class="badge bg-warning text-dark">Si</span>
-                        {% else %}
-                            <span class="badge bg-secondary">No</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <th>Comentarios:</th>
-                    <td>{{ myperson.comments|linebreaks }}</td>
-                </tr>
-            </table>
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Información Personal</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th>ID:</th>
+                        <td>{{ myperson.cedula }}</td>
+                    </tr>
+                    <tr>
+                        <th>Nombre:</th>
+                        <td>{{ myperson.nombre_completo }}</td>
+                    </tr>
+                    <tr>
+                        <th>Cargo:</th>
+                        <td>{{ myperson.cargo }}</td>
+                    </tr>
+                    <tr>
+                        <th>Correo:</th>
+                        <td>{{ myperson.correo }}</td>
+                    </tr>
+                    <tr>
+                        <th>Compania:</th>
+                        <td>{{ myperson.compania }}</td>
+                    </tr>
+                    <tr>
+                        <th>Estado:</th>
+                        <td>
+                            <span class="badge bg-{% if myperson.estado == 'Activo' %}success{% else %}danger{% endif %}">
+                                {{ myperson.estado }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Por revisar:</th>
+                        <td>
+                            {% if myperson.revisar %}
+                                <span class="badge bg-warning text-dark">Si</span>
+                            {% else %}
+                                <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Comentarios:</th>
+                        <td>{{ myperson.comments|linebreaks }}</td>
+                    </tr>
+                </table>
+            </div>
         </div>
     </div>
+
+    <div class="col-md-8 mb-4">
+        <div class="card">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Reportes Financieros</h5>
+                <div>
+                    <span class="badge bg-primary">{{ financial_reports.count }} reportes</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Año</th>
+                                <th>Patrimonio</th>
+                                <th>Activos</th>
+                                <th>Pasivos</th>
+                                <th>Ingresos</th>
+                                <th>Variación</th>
+                                <th>Detalles</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for report in financial_reports %}
+                            <tr>
+                                <td>{{ report.año_declaracion }}</td>
+                                <td>{{ report.patrimonio|floatformat:2|default:"-" }}</td>
+                                <td>{{ report.activos|floatformat:2|default:"-" }}</td>
+                                <td>{{ report.pasivos|floatformat:2|default:"-" }}</td>
+                                <td>{{ report.ingresos|floatformat:2|default:"-" }}</td>
+                                <td>
+                                    {% if report.patrimonio_var_rel %}
+                                        {{ report.patrimonio_var_rel }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="#report-{{ report.id }}" 
+                                       class="btn btn-sm btn-custom-primary" 
+                                       data-bs-toggle="collapse"
+                                       title="Ver detalles">
+                                        <i class="fas fa-chevron-down"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr class="collapse" id="report-{{ report.id }}">
+                                <td colspan="7">
+                                    <div class="p-3 bg-light">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h6>Bancos y Bienes</h6>
+                                                <table class="table table-sm">
+                                                    <tr>
+                                                        <th>Saldo Bancario:</th>
+                                                        <td>{{ report.banco_saldo|floatformat:2|default:"-" }}</td>
+                                                        <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Bienes:</th>
+                                                        <td>{{ report.bienes|floatformat:2|default:"-" }}</td>
+                                                        <td>{{ report.bienes_var_rel|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Inversiones:</th>
+                                                        <td>{{ report.inversiones|floatformat:2|default:"-" }}</td>
+                                                        <td>{{ report.inversiones_var_rel|default:"-" }}</td>
+                                                    </tr>
+                                                </table>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <h6>Indicadores</h6>
+                                                <table class="table table-sm">
+                                                    <tr>
+                                                        <th>Apalancamiento:</th>
+                                                        <td>{{ report.apalancamiento|floatformat:2|default:"-" }}%</td>
+                                                        <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Endeudamiento:</th>
+                                                        <td>{{ report.endeudamiento|floatformat:2|default:"-" }}%</td>
+                                                        <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Aumento Patrimonio:</th>
+                                                        <td colspan="2">{{ report.aum_pat_subito|default:"-" }}</td>
+                                                    </tr>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4">
+                                    No hay reportes financieros disponibles
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/details.html" -Encoding utf8
 
