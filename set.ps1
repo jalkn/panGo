@@ -9,7 +9,8 @@ function migratoDjango {
     Write-Host "🚀 Creating Django Project with Excel Import Functionality" -ForegroundColor $YELLOW
 
     # Install required Python packages
-    python -m pip install django whitenoise django-bootstrap-v5 openpyxl pandas
+    python.exe -m pip install --upgrade pip
+    python -m pip install django whitenoise django-bootstrap-v5 openpyxl pandas xlrd>=2.0.1
 
     # Create Django project
     django-admin startproject arpa
@@ -47,7 +48,7 @@ class Person(models.Model):
 class FinancialReport(models.Model):
     person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='financial_reports')
     fkIdPeriodo = models.CharField(max_length=20, blank=True, null=True)
-    año_declaracion = models.CharField(max_length=20, blank=True, null=True)
+    ano_declaracion = models.CharField(max_length=20, blank=True, null=True)
     año_creacion = models.CharField(max_length=20, blank=True, null=True)
     activos = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
     cant_bienes = models.IntegerField(blank=True, null=True)
@@ -83,16 +84,39 @@ class FinancialReport(models.Model):
     cant_ingresos = models.IntegerField(blank=True, null=True)
     ingresos_var_abs = models.CharField(max_length=50, blank=True, null=True)
     ingresos_var_rel = models.CharField(max_length=50, blank=True, null=True)
-    abundancia = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    capital = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "Reporte Financiero"
         verbose_name_plural = "Reportes Financieros"
-        ordering = ['-año_declaracion']
+        ordering = ['-ano_declaracion']
 
     def __str__(self):
-        return f"Reporte de {self.person.nombre_completo} ({self.año_declaracion})"
+        return f"Reporte de {self.person.nombre_completo} ({self.ano_declaracion})"
+    
+class Conflict(models.Model):
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='conflicts')
+    fecha_inicio = models.DateField(verbose_name="Fecha de Inicio", null=True, blank=True)
+    q1 = models.BooleanField(verbose_name="Accionista de algún proveedor del grupo", default=False)
+    q2 = models.BooleanField(verbose_name="Familiar accionista, proveedor, empleado", default=False)
+    q3 = models.BooleanField(verbose_name="Accionista de alguna compañía del grupo", default=False)
+    q4 = models.BooleanField(verbose_name="Actividades extralaborales", default=False)
+    q5 = models.BooleanField(verbose_name="Negocios o bienes con empleados del grupo", default=False)
+    q6 = models.BooleanField(verbose_name="Participación en juntas o consejos directivos", default=False)
+    q7 = models.BooleanField(verbose_name="Potencial conflicto diferente a los anteriores", default=False)
+    q8 = models.BooleanField(verbose_name="Consciente del código de conducta empresarial", default=False)
+    q9 = models.BooleanField(verbose_name="Veracidad de la información consignada", default=False)
+    q10 = models.BooleanField(verbose_name="Familiar de funcionario público", default=False)
+    q11 = models.BooleanField(verbose_name="Relación con el sector o funcionario público", default=False)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Conflicto"
+        verbose_name_plural = "Conflictos"
+
+    def __str__(self):
+        return f"Conflictos de {self.person.nombre_completo}"
 "@
 
 # Create views.py with import functionality
@@ -100,7 +124,7 @@ Set-Content -Path "core/views.py" -Value @"
 from django.http import HttpResponse, HttpResponseRedirect
 from django.template import loader
 from django.shortcuts import render
-from .models import Person, FinancialReport
+from .models import Person, FinancialReport, Conflict
 import pandas as pd
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -122,7 +146,7 @@ def import_period_excel(request):
                 for chunk in excel_file.chunks():
                     destination.write(chunk)
             
-            messages.success(request, 'Archivo de periodos actualizado exitosamente!')
+            messages.success(request, 'Archivo de periodos importado exitosamente!')
         except Exception as e:
             messages.error(request, f'Error procesando archivo de periodos: {str(e)}')
         
@@ -234,7 +258,7 @@ def process_financial_data():
                     person=person,
                     fkIdPeriodo=row.get('fkIdPeriodo'),
                     defaults={
-                        'año_declaracion': row.get('Año Declaración'),
+                        'ano_declaracion': row.get('Año Declaración'),
                         'año_creacion': row.get('Año Creación'),
                         'activos': row.get('Activos'),
                         'cant_bienes': row.get('Cant_Bienes'),
@@ -270,7 +294,7 @@ def process_financial_data():
                         'cant_ingresos': row.get('Cant_Ingresos'),
                         'ingresos_var_abs': row.get('Ingresos Var. Abs.'),
                         'ingresos_var_rel': row.get('Ingresos Var. Rel.'),
-                        'abundancia': row.get('Abundancia'),
+                        'capital': row.get('Capital'),
                     }
                 )
             except Exception as e:
@@ -283,20 +307,26 @@ def process_financial_data():
         print(f"Error processing financial data: {str(e)}")
         return False
 
-# Update the details view to include financial reports
 def details(request, cedula):
     """View showing details for a single person"""
     myperson = Person.objects.get(cedula=cedula)
-    financial_reports = FinancialReport.objects.filter(person=myperson).order_by('-año_declaracion')
+    financial_reports = FinancialReport.objects.filter(person=myperson).order_by('-ano_declaracion')
+    conflicts = Conflict.objects.filter(person=myperson).order_by('-fecha_inicio')
     
     # Process financial data if reports don't exist
     if not financial_reports.exists():
         process_financial_data()
-        financial_reports = FinancialReport.objects.filter(person=myperson).order_by('-año_declaracion')
+        financial_reports = FinancialReport.objects.filter(person=myperson).order_by('-ano_declaracion')
+    
+    # Process conflict data if conflicts don't exist
+    if not conflicts.exists():
+        process_conflict_data()
+        conflicts = Conflict.objects.filter(person=myperson).order_by('-fecha_inicio')
     
     return render(request, 'details.html', {
         'myperson': myperson,
-        'financial_reports': financial_reports
+        'financial_reports': financial_reports,
+        'conflicts': conflicts
     })
 
 def get_analysis_results():
@@ -367,7 +397,7 @@ def import_persons(request):
                 for chunk in excel_file.chunks():
                     destination.write(chunk)
             
-            messages.success(request, 'Archivo de personas guardado exitosamente!', extra_tags='import_excel')
+            messages.success(request, 'Archivo de personas importado exitosamente!', extra_tags='import_excel')
         except Exception as e:
             messages.error(request, f'Error guardando archivo: {str(e)}', extra_tags='import_excel')
         
@@ -379,9 +409,60 @@ def import_persons(request):
         'analysis_results': analysis_results
     })
 
+# In core/views.py, add this function
+def process_conflict_data():
+    """Process conflict data from inTrends.xlsx and update Conflict model"""
+    try:
+        in_trends_path = "core/src/inTrends.xlsx"
+        
+        if not os.path.exists(in_trends_path):
+            print("inTrends.xlsx file not found")
+            return False
+            
+        df = pd.read_excel(in_trends_path)
+        
+        # Ensure Cedula is string type for comparison
+        df['Cedula'] = df['Cedula'].astype(str)
+        
+        for _, row in df.iterrows():
+            try:
+                # Find the person by cedula
+                person = Person.objects.filter(cedula=str(row['Cedula'])).first()
+                if not person:
+                    continue
+                    
+                # Create or update conflict report
+                Conflict.objects.update_or_create(
+                    person=person,
+                    defaults={
+                        'fecha_inicio': row.get('Fecha de Inicio'),
+                        'q1': row.get('Q1', False),
+                        'q2': row.get('Q2', False),
+                        'q3': row.get('Q3', False),
+                        'q4': row.get('Q4', False),
+                        'q5': row.get('Q5', False),
+                        'q6': row.get('Q6', False),
+                        'q7': row.get('Q7', False),
+                        'q8': row.get('Q8', False),
+                        'q9': row.get('Q9', False),
+                        'q10': row.get('Q10', False),
+                        'q11': row.get('Q11', False),
+                    }
+                )
+            except Exception as e:
+                print(f"Error processing conflict row for cedula {row['Cedula']}: {str(e)}")
+                continue
+                
+        return True
+        
+    except Exception as e:
+        print(f"Error processing conflict data: {str(e)}")
+        return False
+
+# Then update the process_persons_data function to include conflict processing
 def process_persons_data(request):
     """
-    Process data from inTrends.xlsx and update Person model
+    Process data from inTrends.xlsx and update Person model and FinancialReport model
     """
     try:
         # Path to the inTrends file
@@ -425,8 +506,20 @@ def process_persons_data(request):
                     'estado': row['estado'] if row['estado'] in ['Activo', 'Retirado'] else 'Activo',
                 }
             )
-            
-        messages.success(request, f'Datos procesados exitosamente! {len(df)} registros actualizados.')
+        
+        # Call the financial data processing function
+        financial_success = process_financial_data()
+        conflict_success = process_conflict_data()
+        
+        if financial_success and conflict_success:
+            messages.success(request, f'Datos procesados exitosamente! {len(df)} registros de personas, financieros y conflictos actualizados.')
+        elif financial_success:
+            messages.warning(request, f'Datos de personas y financieros procesados, pero hubo un problema con los conflictos.')
+        elif conflict_success:
+            messages.warning(request, f'Datos de personas y conflictos procesados, pero hubo un problema con los reportes financieros.')
+        else:
+            messages.warning(request, f'Datos de personas procesados, pero hubo problemas con los reportes financieros y conflictos.')
+
     except Exception as e:
         messages.error(request, f'Error procesando datos: {str(e)}')
     
@@ -447,7 +540,7 @@ def export_to_excel(request):
     for col_num, header in enumerate(headers, 1):
         col_letter = get_column_letter(col_num)
         ws[f"{col_letter}1"] = header
-
+        
     for row_num, person in enumerate(persons, 2):
         ws[f"A{row_num}"] = person.cedula
         ws[f"B{row_num}"] = person.nombre_completo
@@ -455,7 +548,7 @@ def export_to_excel(request):
         ws[f"D{row_num}"] = person.correo
         ws[f"E{row_num}"] = person.compania
         ws[f"F{row_num}"] = person.estado
-        ws[f"G{row_num}"] = "SÃ­" if person.revisar else "No"
+        ws[f"G{row_num}"] = "Sí" if person.revisar else "No"
         ws[f"H{row_num}"] = person.comments or ""
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -648,7 +741,7 @@ def import_conflict_excel(request):
                 custom_headers=custom_headers
             )
             
-            messages.success(request, 'Archivo de conflictos procesado exitosamente!')
+            messages.success(request, 'Archivo de conflictos importado exitosamente!')
             
             # Clean up temporary file
             if os.path.exists(temp_path):
@@ -682,7 +775,7 @@ urlpatterns = [
     # Create admin.py with enhanced configuration
 Set-Content -Path "core/admin.py" -Value @" 
 from django.contrib import admin
-from .models import Person, FinancialReport
+from .models import Person, FinancialReport, Conflict
 
 def make_active(modeladmin, request, queryset):
     queryset.update(estado='Activo')
@@ -719,15 +812,15 @@ class PersonAdmin(admin.ModelAdmin):
     )
     
 class FinancialReportAdmin(admin.ModelAdmin):
-    list_display = ('person', 'año_declaracion', 'patrimonio', 'activos', 'pasivos', 'last_updated')
-    list_filter = ('año_declaracion', 'person__compania', 'person__estado')
+    list_display = ('person', 'ano_declaracion', 'patrimonio', 'activos', 'pasivos', 'last_updated')
+    list_filter = ('ano_declaracion', 'person__compania', 'person__estado')
     search_fields = ('person__nombre_completo', 'person__cedula')
     list_per_page = 25
     raw_id_fields = ('person',)
     
     fieldsets = (
         (None, {
-            'fields': ('person', 'año_declaracion', 'año_creacion')
+            'fields': ('person', 'ano_declaracion', 'año_creacion')
         }),
         ('Financial Data', {
             'fields': (
@@ -735,7 +828,7 @@ class FinancialReportAdmin(admin.ModelAdmin):
                 ('apalancamiento', 'endeudamiento'),
                 ('banco_saldo', 'bienes', 'inversiones'),
                 ('ingresos', 'cant_ingresos'),
-                ('aum_pat_subito', 'abundancia')
+                ('aum_pat_subito', 'capital')
             )
         }),
         ('Variations', {
@@ -754,9 +847,16 @@ class FinancialReportAdmin(admin.ModelAdmin):
         })
     )
 
+class ConflictAdmin(admin.ModelAdmin):
+    list_display = ('person', 'fecha_inicio', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11')
+    list_filter = ('q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11')
+    search_fields = ('person__nombre_completo', 'person__cedula')
+    raw_id_fields = ('person',)
+    list_per_page = 25
 
 admin.site.register(Person, PersonAdmin)
 admin.site.register(FinancialReport, FinancialReportAdmin)
+admin.site.register(Conflict, ConflictAdmin)
 "@
 
 # Update project urls.py with proper admin configuration
@@ -1802,10 +1902,10 @@ def calculate_sudden_wealth_increase(df):
     df = df.sort_values(['Usuario', 'Año Declaración'])
     
     # Calculate total wealth (Activo + Patrimonio)
-    df['Abundancia'] = df['Activos'] + df['Patrimonio']
+    df['Capital'] = df['Activos'] + df['Patrimonio']
     
     # Calculate year-to-year change
-    df['Aum. Pat. Subito'] = df.groupby('Usuario')['Abundancia'].pct_change(fill_method=None) * 100
+    df['Aum. Pat. Subito'] = df.groupby('Usuario')['Capital'].pct_change(fill_method=None) * 100
     
     # Format as percentage with trend symbol
     df['Aum. Pat. Subito'] = df['Aum. Pat. Subito'].apply(
@@ -2418,7 +2518,7 @@ body {
     <i class="fas fa-wrench"></i>
 </a>
 <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
-    <i class="fas fa-database"></i>
+    <i class="fas fa-upload"></i>
 </a>
 <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">  
     <i class="fas fa-file-excel"></i>
@@ -2527,7 +2627,7 @@ body {
                     {% for person in persons %}
                         <tr {% if person.revisar %}class="table-warning"{% endif %}>
                             <td>
-                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisión{% else %}No marcado{% endif %}">
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisiÃƒÂ³n{% else %}No marcado{% endif %}">
                                     <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}" style="padding-left: 20px;"></i>
                                 </a>
                             </td>
@@ -2620,7 +2720,15 @@ body {
 {% block navbar_title %}Importar Datos{% endblock %}
 
 {% block navbar_buttons %}
-<a href="/" class="btn btn-custom-primary"><i class="fas fa-arrow-right"></i></a>
+<div>
+    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-custom-primary">
+            <i class="fas fa-database"></i>
+        </button>
+    </form>
+    <a href="/" class="btn btn-custom-primary"><i class="fas fa-arrow-right"></i></a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -2632,16 +2740,15 @@ body {
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="period_excel_file" name="period_excel_file" required>
-                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, AÃƒÆ’Ã‚Â±o, FechaFinDeclaracion, FechaInicioDeclaracion, AÃƒÆ’Ã‚Â±o declaracion</div>
+                        <div class="form-text">El archivo Excel de Periodos debe incluir las columnas: Id, Activo, FechaFinDeclaracion, FechaInicioDeclaracion, Ano declaracion</div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Periodos</button>
                 </form>
             </div>
-            <!-- Messages specific to Periodos import -->
             {% for message in messages %}
                 {% if 'import_period_excel' in message.tags %}
                 <div class="card-footer">
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
@@ -2654,7 +2761,7 @@ body {
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'import_persons' %}">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_persons' %}"> 
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="excel_file" name="excel_file" required>
@@ -2663,11 +2770,10 @@ body {
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Personas</button>
                 </form>
             </div>
-            <!-- Messages specific to Personas import -->
             {% for message in messages %}
                 {% if 'import_persons' in message.tags %}
                 <div class="card-footer">
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
@@ -2689,11 +2795,10 @@ body {
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Conflictos</button>
                 </form>
             </div>
-            <!-- Messages specific to Conflictos import -->
             {% for message in messages %}
                 {% if 'import_conflict_excel' in message.tags %}
                 <div class="card-footer">
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
@@ -2715,27 +2820,17 @@ body {
                         <div class="form-text">El archivo Excel de Bienes y Rentas debe incluir las columnas: </div>
                         <div class="mb-3">
                             <input type="password" class="form-control" id="excel_password" name="excel_password">
-                            <div class="form-text">Ingrese la contraseÃƒÆ’Ã‚Â±a</div>
+                            <div class="form-text">Ingrese la contrasena</div>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
                 </form>
             </div>
-            
-            <div class="card-footer">
-                <form method="post" action="{% url 'process_persons' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">
-                        Procesar Personas
-                    </button>
-                </form>
-            </div>
 
-            <!-- Messages specific to Bienes y Rentas import -->
             {% for message in messages %}
                 {% if 'import_protected_excel' in message.tags %}
                 <div class="card-footer">
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
@@ -2745,13 +2840,11 @@ body {
         </div>
     </div>
 
-    <!-- Analysis Results -->
     <div class="col-md-8 mb-4">
         <div class="card h-100">
             <div class="card-header bg-light">
-                <h5 class="mb-0">Resultados del AnÃƒÆ’Ã‚Â¡lisis</h5>
+                <h5 class="mb-0">Resultados del Analisis</h5>
             </div>
-                <!-- In the analysis results table section -->
                 <div class="card-body">
                     {% if analysis_results %}
                     <div class="table-responsive">
@@ -2761,7 +2854,7 @@ body {
                                     <th>Archivo Generado</th>
                                     <th>Registros</th>
                                     <th>Estado</th>
-                                    <th>ÃƒÅ¡ltima ActualizaciÃƒÂ³n</th>
+                                    <th>Ultima Actualizacion</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2770,7 +2863,7 @@ body {
                                     <td>{{ result.filename }}</td>
                                     <td>{{ result.records|default:"-" }}</td>
                                     <td>
-                                        <span class="badge bg-{% if result.status == 'success' %}success{% elif result.status == 'error' %}danger{% else %}secondary{% endif %}"> 
+                                        <span class="badge bg-{% if result.status == 'success' %}success{% elif result.status == 'error' %}danger{% else %}secondary{% endif %}">
                                             {% if result.status == 'success' %}
                                                 Exitoso
                                             {% elif result.status == 'pending' %}
@@ -2782,7 +2875,7 @@ body {
                                             {% endif %}
                                         </span>
                                         {% if result.status == 'error' and result.error %}
-                                        <small class="text-muted d-block">{{ result.error }}</small>
+                                        <small class="text-muted d-block">{{ result.error }}</small>   
                                         {% endif %}
                                     </td>
                                     <td>
@@ -2800,7 +2893,7 @@ body {
                     {% else %}
                     <div class="text-center py-4">
                         <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No hay resultados de anÃƒÂ¡lisis disponibles</p>
+                        <p class="text-muted">No hay resultados de anÃ¡lisis disponibles</p>
                     </div>
                     {% endif %}
                 </div>
@@ -2813,8 +2906,8 @@ body {
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/import_excel.html" -Encoding utf8
 
-    # Create details template
-    @"
+# Create details template
+@"
 {% extends "master.html" %}
 
 {% block title %}Detalles - {{ myperson.nombre_completo }}{% endblock %}
@@ -2824,7 +2917,7 @@ body {
 <a href="/admin/core/person/{{ myperson.cedula }}/change/" class="btn btn-outline-dark" title="Admin">
     <i class="fas fa-wrench"></i>
 </a>
-<a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">  
+<a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">
     <i class="fas fa-file-excel"></i>
 </a>
 <a href="/" class="btn btn-custom-primary"><i class="fas fa-arrow-right"></i></a>
@@ -2832,10 +2925,10 @@ body {
 
 {% block content %}
 <div class="row">
-    <div class="col-md-4 mb-4">
-        <div class="card">
+    <div class="col-md-6 mb-4"> {# Column for Informacion Personal - half width #}
+        <div class="card h-100"> {# Added h-100 for equal height #}
             <div class="card-header bg-light">
-                <h5 class="mb-0">Información Personal</h5>
+                <h5 class="mb-0">Informacion Personal</h5>
             </div>
             <div class="card-body">
                 <table class="table">
@@ -2886,7 +2979,79 @@ body {
         </div>
     </div>
 
-    <div class="col-md-8 mb-4">
+    <div class="col-md-6 mb-4"> {# Column for Conflictos Declarados - half width #}
+        <div class="card h-100"> {# Added h-100 for equal height #}
+            <div class="card-header bg-light">
+                <h5 class="mb-0">Conflictos Declarados</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if conflicts %}
+                {% for conflict in conflicts %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <tbody>
+                            <tr>
+                                <th scope="row">Fecha de Inicio</th>
+                                <td>{{ conflict.fecha_inicio|date:"d/m/Y"|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Accionista de algún proveedor del grupo</th>
+                                <td>{% if conflict.q1 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Familiar accionista, proveedor, empleado</th>
+                                <td>{% if conflict.q2 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Accionista de alguna compañía del grupo</th>
+                                <td>{% if conflict.q3 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Actividades extralaborales</th>
+                                <td>{% if conflict.q4 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Negocios o bienes con empleados del grupo</th>
+                                <td>{% if conflict.q5 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Participación en juntas o consejos directivos</th>
+                                <td>{% if conflict.q6 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Potencial conflicto diferente a los anteriores</th>
+                                <td>{% if conflict.q7 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Consciente del código de conducta empresarial</th>
+                                <td>{% if conflict.q8 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Veracidad de la información consignada</th>
+                                <td>{% if conflict.q9 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Familiar de funcionario público</th>
+                                <td>{% if conflict.q10 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Relación con el sector o funcionario público</th>
+                                <td>{% if conflict.q11 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <hr> {% endfor %}
+                {% else %}
+                <p class="text-center py-4">No hay conflictos declarados disponibles</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row"> {# New row for Reportes Financieros #}
+    <div class="col-md-12 mb-4"> {# Full width column for Reportes Financieros #}
         <div class="card">
             <div class="card-header bg-light d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Reportes Financieros</h5>
@@ -2899,12 +3064,13 @@ body {
                     <table class="table table-striped table-hover mb-0">
                         <thead>
                             <tr>
-                                <th>Año</th>
-                                <th>Patrimonio</th>
+                                <th>Ano</th>
                                 <th>Activos</th>
                                 <th>Pasivos</th>
                                 <th>Ingresos</th>
-                                <th>Variación</th>
+                                <th>Capital</th>
+                                <th>Patrimonio</th>
+                                <th>Patrimonio Var Rel</th>
                                 <th>Detalles</th>
                             </tr>
                         </thead>
@@ -2912,10 +3078,11 @@ body {
                             {% for report in financial_reports %}
                             <tr>
                                 <td>{{ report.ano_declaracion }}</td>
-                                <td>&#36;{{ report.patrimonio|floatformat:2|default:"-" }}</td>
                                 <td>&#36;{{ report.activos|floatformat:2|default:"-" }}</td>
                                 <td>&#36;{{ report.pasivos|floatformat:2|default:"-" }}</td>
                                 <td>&#36;{{ report.ingresos|floatformat:2|default:"-" }}</td>
+                                <td>&#36;{{ report.capital|floatformat:2|default:"-" }}</td>
+                                <td>&#36;{{ report.patrimonio|floatformat:2|default:"-" }}</td>
                                 <td>
                                     {% if report.patrimonio_var_rel %}
                                         {{ report.patrimonio_var_rel }}
@@ -2924,8 +3091,8 @@ body {
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a href="#report-{{ report.id }}" 
-                                       class="btn btn-sm btn-custom-primary" 
+                                    <a href="#report-{{ report.id }}"
+                                       class="btn btn-sm btn-custom-primary"
                                        data-bs-toggle="collapse"
                                        title="Ver detalles">
                                         <i class="fas fa-chevron-down"></i>
@@ -2933,45 +3100,86 @@ body {
                                 </td>
                             </tr>
                             <tr class="collapse" id="report-{{ report.id }}">
-                                <td colspan="7">
+                                <td colspan="8"> {# This colspan now spans 8 columns #}
                                     <div class="p-3 bg-light">
-                                        <div class="row">
-                                            <div class="col-md-6">
+                                        {# Use a single row with cols for horizontal display of variations #}
+                                        <div class="row g-2"> {# g-2 for small gutter between columns #}
+                                            <div class="col-md-4">
                                                 <h6>Bancos y Bienes</h6>
                                                 <table class="table table-sm">
                                                     <tr>
                                                         <th>Saldo Bancario:</th>
                                                         <td>&#36;{{ report.banco_saldo|floatformat:2|default:"-" }}</td>
-                                                        <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
                                                     </tr>
                                                     <tr>
                                                         <th>Bienes:</th>
                                                         <td>&#36;{{ report.bienes|floatformat:2|default:"-" }}</td>
-                                                        <td>{{ report.bienes_var_rel|default:"-" }}</td>
                                                     </tr>
                                                     <tr>
                                                         <th>Inversiones:</th>
                                                         <td>&#36;{{ report.inversiones|floatformat:2|default:"-" }}</td>
-                                                        <td>{{ report.inversiones_var_rel|default:"-" }}</td>
                                                     </tr>
                                                 </table>
                                             </div>
-                                            <div class="col-md-6">
+                                            <div class="col-md-4">
                                                 <h6>Indicadores</h6>
                                                 <table class="table table-sm">
                                                     <tr>
                                                         <th>Apalancamiento:</th>
                                                         <td>{{ report.apalancamiento|floatformat:2|default:"-" }}%</td>
-                                                        <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
                                                     </tr>
                                                     <tr>
                                                         <th>Endeudamiento:</th>
                                                         <td>{{ report.endeudamiento|floatformat:2|default:"-" }}%</td>
-                                                        <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
                                                     </tr>
                                                     <tr>
-                                                        <th>Aumento Patrimonio:</th>
-                                                        <td colspan="2">{{ report.aum_pat_subito|default:"-" }}</td>
+                                                        <th>Ind. Aum. Pat. Subito:</th>
+                                                        <td>{{ report.aum_pat_subito|default:"-" }}</td>
+                                                    </tr>
+                                                </table>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <h6>Variaciones (Rel. / Abs.)</h6>
+                                                <table class="table table-sm">
+                                                    <tr>
+                                                        <th>Activos:</th>
+                                                        <td>Rel: {{ report.activos_var_rel|default:"-" }} / Abs: {{ report.activos_var_abs|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Pasivos:</th>
+                                                        <td>Rel: {{ report.pasivos_var_rel|default:"-" }} / Abs: {{ report.pasivos_var_abs|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Ingresos:</th>
+                                                        <td>Rel: {{ report.ingresos_var_rel|default:"-" }} / Abs: {{ report.ingresos_var_abs|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Patrimonio:</th>
+                                                        <td>Rel: {{ report.patrimonio_var_rel|default:"-" }} / Abs: {{ report.patrimonio_var_abs|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Saldo Bancario:</th>
+                                                        <td>Rel: {{ report.banco_saldo_var_rel|default:"-" }} / Abs: {{ report.banco_saldo_var_abs|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Bienes:</th>
+                                                        <td>Rel: {{ report.bienes_var_rel|default:"-" }} / Abs: {{ report.bienes_var_abs|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Inversiones:</th>
+                                                        <td>Rel: {{ report.inversiones_var_rel|default:"-" }} / Abs: {{ report.inversiones_var_abs|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Apalancamiento:</th>
+                                                        <td>Rel: {{ report.apalancamiento_var_rel|default:"-" }} / Abs: {{ report.apalancamiento_var_abs|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Endeudamiento:</th>
+                                                        <td>Rel: {{ report.endeudamiento_var_rel|default:"-" }} / Abs: {{ report.endeudamiento_var_abs|default:"-" }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <th>Capital:</th>
+                                                        <td>Rel: {{ report.capital_var_rel|default:"-" }} / Abs: {{ report.capital_var_abs|default:"-" }}</td>
                                                     </tr>
                                                 </table>
                                             </div>
@@ -2981,7 +3189,7 @@ body {
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="7" class="text-center py-4">
+                                <td colspan="8" class="text-center py-4">
                                     No hay reportes financieros disponibles
                                 </td>
                             </tr>
