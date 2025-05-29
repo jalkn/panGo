@@ -483,7 +483,7 @@ def process_conflict_data():
 # Then update the process_persons_data function to include conflict processing
 def process_persons_data(request):
     """
-    Process data from inTrends.xlsx and update Person model and FinancialReport model
+    Process data from inTrends.xlsx and update Person model, FinancialReport model, and Conflict model
     """
     try:
         # Path to the inTrends file
@@ -496,6 +496,9 @@ def process_persons_data(request):
         # Read the inTrends file
         df = pd.read_excel(inTrends_path)
         
+        # Convert 'nan' strings to actual NaN values
+        df.replace('nan', pd.NA, inplace=True)
+        
         # Column mapping from inTrends to Person model
         column_mapping = {
             'Cedula': 'cedula',
@@ -506,43 +509,75 @@ def process_persons_data(request):
             'Estado': 'estado'
         }
         
+        # Ensure all required columns exist
+        missing_cols = [col for col in column_mapping.keys() if col not in df.columns]
+        if missing_cols:
+            messages.error(request, f'El archivo inTrends.xlsx no tiene las columnas requeridas: {", ".join(missing_cols)}')
+            return HttpResponseRedirect('/persons/import/')
+        
         # Rename columns to match model
         df.rename(columns=column_mapping, inplace=True)
         
-        # Filter only columns we need
-        df = df[list(column_mapping.values())]
+        # Filter only columns we need for Person model
+        person_df = df[list(column_mapping.values())].copy()
         
-        # Fill empty values
-        df.fillna('', inplace=True)
+        # Fill empty values and clean data
+        person_df.fillna('', inplace=True)
+        person_df['estado'] = person_df['estado'].apply(
+            lambda x: x if x in ['Activo', 'Retirado'] else 'Activo'
+        )
         
-        # Update or create Person records
-        for _, row in df.iterrows():
-            Person.objects.update_or_create(
+        # Update or create Person records in bulk for better performance
+        persons_created = 0
+        persons_updated = 0
+        
+        for _, row in person_df.iterrows():
+            obj, created = Person.objects.update_or_create(
                 cedula=row['cedula'],
                 defaults={
                     'nombre_completo': row['nombre_completo'],
                     'cargo': row['cargo'],
                     'correo': row['correo'],
                     'compania': row['compania'],
-                    'estado': row['estado'] if row['estado'] in ['Activo', 'Retirado'] else 'Activo',
+                    'estado': row['estado'],
                 }
             )
+            if created:
+                persons_created += 1
+            else:
+                persons_updated += 1
         
-        # Call the financial data processing function
+        # Process financial data and conflicts
         financial_success = process_financial_data()
         conflict_success = process_conflict_data()
         
-        if financial_success and conflict_success:
-            messages.success(request, f'Datos procesados exitosamente! {len(df)} registros de personas, financieros y conflictos actualizados.')
-        elif financial_success:
-            messages.warning(request, f'Datos de personas y financieros procesados, pero hubo un problema con los conflictos.')
-        elif conflict_success:
-            messages.warning(request, f'Datos de personas y conflictos procesados, pero hubo un problema con los reportes financieros.')
-        else:
-            messages.warning(request, f'Datos de personas procesados, pero hubo problemas con los reportes financieros y conflictos.')
+        # Prepare success message
+        msg_parts = []
+        if persons_created or persons_updated:
+            msg_parts.append(f"{persons_created} nuevas personas creadas, {persons_updated} actualizadas")
+        
+        if financial_success:
+            financial_count = FinancialReport.objects.count()
+            msg_parts.append(f"{financial_count} reportes financieros procesados")
+        
+        if conflict_success:
+            conflict_count = Conflict.objects.count()
+            msg_parts.append(f"{conflict_count} conflictos procesados")
+        
+        if msg_parts:
+            messages.success(request, 'Datos procesados exitosamente! ' + ', '.join(msg_parts) + '.')
+        
+        if not financial_success:
+            messages.warning(request, 'Hubo un problema procesando los reportes financieros.')
+        
+        if not conflict_success:
+            messages.warning(request, 'Hubo un problema procesando los conflictos.')
 
     except Exception as e:
         messages.error(request, f'Error procesando datos: {str(e)}')
+        # Log the full error for debugging
+        import traceback
+        traceback.print_exc()
     
     return HttpResponseRedirect('/persons/import/')
 
@@ -1999,185 +2034,156 @@ if __name__ == "__main__":
 # Create core/idTrends.py
 Set-Content -Path "core/idTrends.py" -Value @"
 import pandas as pd
-from pathlib import Path
+import os
+from datetime import datetime
 
 def merge_trends_data(personas_file, trends_file, output_file):
     """
-    Merge trends data with personas data:
-    - Keeps all records from trends.xlsx
-    - Ensures only 'Compania' column exists (removes 'Compañía')
-    - Adds 'Cedula', 'Correo' and 'Estado' from Personas.xlsx at the beginning
-    - Matches on 'Id' (Personas) with 'Usuario' (trends)
+    Merge personas data with trends data and save to output file.
+    Returns True if successful, False otherwise.
     """
     try:
-        # Create output directory if needed
-        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-        
-        # Read both files
-        df_personas = pd.read_excel(personas_file, engine='openpyxl')
-        df_trends = pd.read_excel(trends_file, engine='openpyxl')
-        
-        # Select only the columns we need from personas
-        persona_columns = ['Id', 'Cedula', 'Correo', 'Compania', 'CARGO', 'Estado']
-        df_personas_subset = df_personas[persona_columns]
-        
-        # Perform left join (keep all trends records)
-        merged_df = pd.merge(
-            left=df_trends,
-            right=df_personas_subset,
-            how='left',
-            left_on='Usuario',
-            right_on='Id'
-        )
-        
-        # Drop the Id column from the merge (we only needed it for matching)
-        merged_df = merged_df.drop(columns=['Id'])
-        
-        # Handle Compañía/Compania columns - ensure we only have 'Compania'
-        if 'Compañía' in merged_df.columns:
-            # If both exist, use Compania from personas and drop Compañía
-            if 'Compania' in merged_df.columns:
-                merged_df = merged_df.drop(columns=['Compañía'])
-            else:
-                # Just rename Compañía to Compania
-                merged_df = merged_df.rename(columns={'Compañía': 'Compania'})
-        
-        # Handle Cargo columns
-        if 'Cargo' in merged_df.columns and 'CARGO' in merged_df.columns:
-            merged_df['Cargo'] = merged_df['CARGO'].combine_first(merged_df['Cargo'])
-            merged_df = merged_df.drop(columns=['CARGO'])
-        elif 'CARGO' in merged_df.columns:
-            merged_df = merged_df.rename(columns={'CARGO': 'Cargo'})
-        
-        # Reorder columns to put Cedula and Estado first
-        cols = ['Cedula', 'Estado'] + [col for col in merged_df.columns if col not in ['Cedula', 'Estado']]
-        merged_df = merged_df[cols]
-        
-        # Ensure the column order matches your desired output
-        desired_columns = [
-            'Cedula', 'Estado', 'Usuario', 'Nombre', 'Compania', 'Cargo', 'fkIdPeriodo', 
-            'Año Declaración', 'Año Creación', 'Activos', 'Cant_Bienes', 
-            'Cant_Bancos', 'Cant_Cuentas', 'Cant_Inversiones', 'Pasivos', 
-            'Cant_Deudas', 'Patrimonio', 'Apalancamiento', 'Endeudamiento',
-            'Aum. Pat. Subito', 'Activos Var. Abs.', 'Activos Var. Rel.', 
-            'Pasivos Var. Abs.', 'Pasivos Var. Rel.', 'Patrimonio Var. Abs.', 
-            'Patrimonio Var. Rel.', 'Apalancamiento Var. Abs.', 'Apalancamiento Var. Rel.', 
-            'Endeudamiento Var. Abs.', 'Endeudamiento Var. Rel.', 'BancoSaldo', 
-            'Bienes', 'Inversiones', 'BancoSaldo Var. Abs.', 'BancoSaldo Var. Rel.', 
-            'Bienes Var. Abs.', 'Bienes Var. Rel.', 'Inversiones Var. Abs.', 
-            'Inversiones Var. Rel.', 'Ingresos', 'Cant_Ingresos', 
-            'Ingresos Var. Abs.', 'Ingresos Var. Rel.', 'Correo'
-        ]
-        
-        # Keep only columns that exist in the dataframe and are in desired_columns
-        final_columns = [col for col in desired_columns if col in merged_df.columns]
-        # Add any remaining columns not in desired_columns (except Compañía)
-        remaining_columns = [col for col in merged_df.columns 
-                           if col not in desired_columns and col != 'Compañía']
-        merged_df = merged_df[final_columns + remaining_columns]
-        
-        # Save to Excel
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            merged_df.to_excel(writer, index=False)
-            
-        print(f"Successfully merged files with correo data")
-        
-    except Exception as e:
-        print(f"Error merging files: {str(e)}")
-        raise
+        # Load the Excel files
+        personas = pd.read_excel(personas_file)
+        trends = pd.read_excel(trends_file)
 
-if __name__ == "__main__":
-    # Configuration
-    CONFIG = {
-        'personas_file': "core/src/Personas.xlsx",      # Personas data file
-        'trends_file': "core/src/trends.xlsx",  # Trends data file
-        'output_file': "core/src/idTrends.xlsx"      # Output file
-    }
-    
-    # Run merging
-    merge_trends_data(
-        personas_file=CONFIG['personas_file'],
-        trends_file=CONFIG['trends_file'],
-        output_file=CONFIG['output_file']
-    )
+        # Rename columns in trends to match personas where appropriate
+        trends = trends.rename(columns={
+            'Nombre': 'NOMBRE COMPLETO',
+            'Compañía': 'Compania',
+            'Cargo': 'CARGO'
+        })
+
+        # Perform a full outer join to keep all data from both tables
+        merged = pd.merge(
+            personas,
+            trends,
+            on=['NOMBRE COMPLETO', 'CARGO', 'Compania'],
+            how='outer',
+            indicator=True
+        )
+
+        # For rows that only existed in trends, copy the Usuario to Cedula if Cedula is null
+        merged['Cedula'] = merged['Cedula'].fillna(merged['Usuario'])
+
+        # Select and order the columns as specified with renamed columns
+        final_columns = [
+            'Cedula', 'Nombre', 'Cargo', 'Correo', 'Compania', 'Estado',
+            'fkIdPeriodo', 'Año Declaración', 'Año Creación', 'Activos', 'Cant_Bienes',
+            'Cant_Bancos', 'Cant_Cuentas', 'Cant_Inversiones', 'Pasivos', 'Cant_Deudas',
+            'Patrimonio', 'Apalancamiento', 'Endeudamiento', 'Capital', 'Aum. Pat. Subito',
+            'Activos Var. Abs.', 'Activos Var. Rel.', 'Pasivos Var. Abs.', 'Pasivos Var. Rel.',
+            'Patrimonio Var. Abs.', 'Patrimonio Var. Rel.', 'Apalancamiento Var. Abs.',
+            'Apalancamiento Var. Rel.', 'Endeudamiento Var. Abs.', 'Endeudamiento Var. Rel.',
+            'BancoSaldo', 'Bienes', 'Inversiones', 'BancoSaldo Var. Abs.', 'BancoSaldo Var. Rel.',
+            'Bienes Var. Abs.', 'Bienes Var. Rel.', 'Inversiones Var. Abs.', 'Inversiones Var. Rel.',
+            'Ingresos', 'Cant_Ingresos', 'Ingresos Var. Abs.', 'Ingresos Var. Rel.'
+        ]
+
+        # Rename the columns in the merged dataframe before selection
+        merged = merged.rename(columns={
+            'NOMBRE COMPLETO': 'Nombre',
+            'CARGO': 'Cargo'
+        })
+
+        # Ensure we only keep columns that exist in our merged dataframe
+        final_columns = [col for col in final_columns if col in merged.columns]
+
+        final_df = merged[final_columns]
+
+        # Fill null values with 'nan'
+        final_df = final_df.fillna('nan')
+
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
+        # Save to new Excel file
+        final_df.to_excel(output_file, index=False)
+        
+        return True
+
+    except Exception as e:
+        print(f"Error merging trends data: {str(e)}")
+        return False
 "@
 
 # Create core/inTrends.py -merge trends with conflictos
 Set-Content -Path "core/inTrends.py" -Value @"
 import pandas as pd
-from pathlib import Path
+import os
+from datetime import datetime
 
 def merge_conflicts_data(idtrends_file, conflicts_file, output_file):
     """
-    Merge idTrends data with conflicts data:
-    - Keeps all records from idTrends.xlsx
-    - Adds only specified columns from conflicts.xlsx
-    - Preserves 'Estado' column from idTrends
-    - Matches on 'Cedula' (idTrends) with 'Cedula' (conflicts)
+    Merge idtrends data with conflicts data and save to output file.
+    Returns True if successful, False otherwise.
     """
     try:
-        # Create output directory if needed
-        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-        
-        # Read both files
-        df_idtrends = pd.read_excel(idtrends_file, engine='openpyxl')
-        df_conflicts = pd.read_excel(conflicts_file, engine='openpyxl')
-        
-        # Convert both key columns to string type to ensure consistent merging
-        df_idtrends['Cedula'] = df_idtrends['Cedula'].astype(str)
-        df_conflicts['Cedula'] = df_conflicts['Cedula'].astype(str)
-        
-        # Columns to keep from conflicts file
-        conflicts_columns_to_keep = [
-            'Cedula', 
-            'Fecha de Inicio', 
-            'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 
-            'Q6', 'Q7', 'Q8', 'Q9', 'Q10'
-        ]
-        
-        # Perform left join (keep all idTrends records)
-        merged_df = pd.merge(
-            left=df_idtrends,
-            right=df_conflicts[conflicts_columns_to_keep],
-            how='left',
-            left_on='Cedula',
-            right_on='Cedula'
-        )
-        
-        # Ensure Estado column is preserved near the beginning
-        if 'Estado' in merged_df.columns:
-            cols = ['Cedula', 'Estado'] + [col for col in merged_df.columns if col not in ['Cedula', 'Estado']]
-            merged_df = merged_df[cols]
-        
-        # Save to Excel
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            merged_df.to_excel(writer, index=False)
-            
-        print(f"Successfully merged files:\n"
-              f"idTrends file: {idtrends_file}\n"
-              f"Conflicts file: {conflicts_file}\n"
-              f"Output: {output_file}\n"
-              f"Total records: {len(merged_df)}\n"
-              f"Records with matched conflicts data: {merged_df['Fecha de Inicio'].notna().sum()}")
-        
-    except Exception as e:
-        print(f"Error merging files: {str(e)}")
-        raise
+        # Load the Excel files
+        idtrends = pd.read_excel(idtrends_file)
+        conflicts = pd.read_excel(conflicts_file)
 
-if __name__ == "__main__":
-    # Configuration
-    CONFIG = {
-        'idtrends_file': "core/src/idTrends.xlsx",  # idTrends data file
-        'conflicts_file': "core/src/conflicts.xlsx",  # Conflicts data file
-        'output_file': "core/src/inTrends.xlsx"  # Output file
-    }
-    
-    # Run merging
-    merge_conflicts_data(
-        idtrends_file=CONFIG['idtrends_file'],
-        conflicts_file=CONFIG['conflicts_file'],
-        output_file=CONFIG['output_file']
-    )
+        # Standardize column names (handle multiple possible email column names)
+        email_columns = ['Correo', 'Email', 'Correo Electrónico', 'E-mail']
+        
+        # Find which email column exists in conflicts data
+        conflicts_email_col = next((col for col in email_columns if col in conflicts.columns), None)
+        if not conflicts_email_col:
+            raise ValueError("No valid email column found in conflicts file")
+            
+        # Rename columns in conflicts to match idtrends
+        conflicts = conflicts.rename(columns={
+            'Compañía': 'Compania',
+            conflicts_email_col: 'Correo'  # Standardize to 'Correo'
+        })
+
+        # Ensure idtrends has the Correo column
+        if 'Correo' not in idtrends.columns:
+            idtrends['Correo'] = ''  # Add empty column if missing
+
+        # Perform a full outer join to keep all data from both tables
+        merged = pd.merge(
+            idtrends,
+            conflicts,
+            on=['Cedula', 'Nombre', 'Cargo', 'Compania'],
+            how='outer',
+            indicator=True
+        )
+
+        # Select and order the columns as specified (removed duplicate Correo)
+        final_columns = [
+            'Cedula', 'Estado', 'Nombre', 'Compania', 'Cargo', 'Correo',
+            'fkIdPeriodo', 'Año Declaración', 'Año Creación', 'Activos', 'Cant_Bienes',
+            'Cant_Bancos', 'Cant_Cuentas', 'Cant_Inversiones', 'Pasivos', 'Cant_Deudas',
+            'Patrimonio', 'Apalancamiento', 'Endeudamiento', 'Aum. Pat. Subito',
+            'Activos Var. Abs.', 'Activos Var. Rel.', 'Pasivos Var. Abs.', 'Pasivos Var. Rel.',
+            'Patrimonio Var. Abs.', 'Patrimonio Var. Rel.', 'Apalancamiento Var. Abs.',
+            'Apalancamiento Var. Rel.', 'Endeudamiento Var. Abs.', 'Endeudamiento Var. Rel.',
+            'BancoSaldo', 'Bienes', 'Inversiones', 'BancoSaldo Var. Abs.', 'BancoSaldo Var. Rel.',
+            'Bienes Var. Abs.', 'Bienes Var. Rel.', 'Inversiones Var. Abs.', 'Inversiones Var. Rel.',
+            'Ingresos', 'Cant_Ingresos', 'Ingresos Var. Abs.', 'Ingresos Var. Rel.',
+            'Capital', 'Fecha de Inicio', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10'
+        ]
+
+        # Ensure we only keep columns that exist in our merged dataframe
+        final_columns = [col for col in final_columns if col in merged.columns]
+
+        final_df = merged[final_columns]
+
+        # Fill null values with empty string instead of 'nan'
+        final_df = final_df.fillna('')
+
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
+        # Save to new Excel file
+        final_df.to_excel(output_file, index=False)
+        
+        return True
+
+    except Exception as e:
+        print(f"Error merging conflicts data: {str(e)}")
+        return False
 "@
 
 # Create core/conflicts.py
@@ -3017,48 +3023,48 @@ body {
                                 <td>{{ conflict.fecha_inicio|date:"d/m/Y"|default:"-" }}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Accionista de algún proveedor del grupo</th>
-                                <td>{% if conflict.q1 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <th scope="row">Accionista de algun proveedor del grupo</th>
+                                <td>{% if conflict.q1 %}<i class="text-danger">SI</i>{% else %}<i class="text-success">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Familiar accionista, proveedor, empleado</th>
-                                <td>{% if conflict.q2 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <th scope="row">Familiar de algun accionista, proveedor o empleado</th>
+                                <td>{% if conflict.q2 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Accionista de alguna compañía del grupo</th>
-                                <td>{% if conflict.q3 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <th scope="row">Accionista de alguna companiÃ‚Â­a del grupo</th>
+                                <td>{% if conflict.q3 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Actividades extralaborales</th>
-                                <td>{% if conflict.q4 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <td>{% if conflict.q4 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Negocios o bienes con empleados del grupo</th>
-                                <td>{% if conflict.q5 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <td>{% if conflict.q5 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Participación en juntas o consejos directivos</th>
-                                <td>{% if conflict.q6 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <th scope="row">Participacion en juntas o consejos directivos</th>
+                                <td>{% if conflict.q6 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Potencial conflicto diferente a los anteriores</th>
-                                <td>{% if conflict.q7 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <td>{% if conflict.q7 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Consciente del código de conducta empresarial</th>
-                                <td>{% if conflict.q8 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <th scope="row">Consciente del codigo de conducta empresarial</th>
+                                <td>{% if conflict.q8 %}<i class="text-success">SI</i>{% else %}<i class=" text-danger">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Veracidad de la información consignada</th>
-                                <td>{% if conflict.q9 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <th scope="row">Veracidad de la informacion consignada</th>
+                                <td>{% if conflict.q9 %}<i class="text-success">SI</i>{% else %}<i class=" text-danger">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Familiar de funcionario público</th>
-                                <td>{% if conflict.q10 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <th scope="row">Familiar de algun funcionario publico</th>
+                                <td>{% if conflict.q10 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Relación con el sector o funcionario público</th>
-                                <td>{% if conflict.q11 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <th scope="row">Relacion con el sector publico o funcionario publico</th>
+                                <td>{% if conflict.q11 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -3087,7 +3093,7 @@ body {
                         <thead>
                             <tr>
                                 <th>Ano</th>
-                                <th scope="col">Variación</th>
+                                <th scope="col">Variaciones</th>
                                 <th>Activos</th>
                                 <th>Pasivos</th>
                                 <th>Ingresos</th>
@@ -3098,27 +3104,14 @@ body {
                                 <th>Apalancamiento</th>
                                 <th>Endeudamiento</th>
                                 <th>Indice</th>
+                                <th>Details</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for report in financial_reports %}
-                            <tr>
+                            <tr data-bs-toggle="collapse" data-bs-target="#details-{{ report.ano_declaracion }}" aria-expanded="false" aria-controls="details-{{ report.ano_declaracion }}" style="cursor: pointer;">
                                 <td>{{ report.ano_declaracion }}</td>
-                                <th>Relativa</th>
-                                <td>{{ report.activos_var_rel|default:"-" }}</td>
-                                <td>{{ report.pasivos_var_rel|default:"-" }}</td>
-                                <td>{{ report.ingresos_var_rel|default:"-" }}</td>
-                                <td>{{ report.patrimonio_var_rel|default:"-" }}</td>
-                                <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
-                                <td>{{ report.bienes_var_rel|default:"-" }}</td>
-                                <td>{{ report.inversiones_var_rel|default:"-" }}</td>
-                                <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
-                                <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
-                                <td>{{ report.aum_pat_subito|default:"-" }}</td>
-                            </tr>
-                            <tr>
-                                <th></th>
-                                <th scope="col">Absoluta</th>
+                                <th>Absolutas</th>
                                 <td>{{ report.activos_var_abs|intcomma|default:"-" }}</td>
                                 <td>{{ report.pasivos_var_abs|intcomma|default:"-" }}</td>
                                 <td>{{ report.ingresos_var_abs|intcomma|default:"-" }}</td>
@@ -3129,40 +3122,68 @@ body {
                                 <td>{{ report.apalancamiento_var_abs|default:"-" }}</td>
                                 <td>{{ report.endeudamiento_var_abs|default:"-" }}</td>
                                 <td>{{ report.capital_var_abs|intcomma|default:"-" }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#details-{{ report.ano_declaracion }}">
+                                        <i class="fas fa-chevron-down"></i>
+                                    </button>
+                                </td>
                             </tr>
-                            <tr>
-                                <td></td>
-                                <th scope="col">Total</th>
-                                <td>&#36;{{ report.activos|floatformat:2|intcomma|default:"-" }}</td>
-                                <td>&#36;{{ report.pasivos|floatformat:2|intcomma|default:"-" }}</td>
-                                <td>&#36;{{ report.ingresos|floatformat:2|intcomma|default:"-" }}</td>
-                                <td>&#36;{{ report.patrimonio|floatformat:2|intcomma|default:"-" }}</td>
-                                <td>&#36;{{ report.banco_saldo|floatformat:2|intcomma|default:"-" }}</td>
-                                <td>&#36;{{ report.bienes|floatformat:2|intcomma|default:"-" }}</td>
-                                <td>&#36;{{ report.inversiones|floatformat:2|intcomma|default:"-" }}</td>
-                                <td>{{ report.apalancamiento|floatformat:2|default:"-" }}</td>
-                                <td>{{ report.endeudamiento|floatformat:2|default:"-" }}</td>
-                                <td>&#36;{{ report.capital|floatformat:2|intcomma|default:"-" }}</td>
-                            </tr>
-                            <tr>
-                                <th></th>
-                                <th scope="col">Cant.</th>
-                                <td></td>
-                                <td>{{ report.cant_deudas|default:"-" }}</td>
-                                <td>{{ report.cant_ingresos|default:"-" }}</td>
-                                <td></td>
-                                <td>C{{ report.cant_cuentas|default:"-" }} B{{ report.cant_bancos|default:"-" }}</td>
-                                <td>{{ report.cant_bienes|default:"-" }}</td>
-                                <td>{{ report.cant_inversiones|default:"-" }}</td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                            </tr>
-                                
+                            <tr class="collapse" id="details-{{ report.ano_declaracion }}">
+                                <td colspan="13" class="p-0">
+                                    <table class="table table-borderless mb-0">
+                                        <tbody>
+                                            <tr>
+                                                <td>........</td>
+                                                <th scope="col">Relativas</th>
+                                                <td>{{ report.activos_var_rel|default:"-" }}</td>
+                                                <td>{{ report.pasivos_var_rel|default:"-" }}</td>
+                                                <td>{{ report.ingresos_var_rel|default:"-" }}</td>
+                                                <td>{{ report.patrimonio_var_rel|default:"-" }}</td>
+                                                <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
+                                                <td>{{ report.bienes_var_rel|default:"-" }}</td>
+                                                <td>{{ report.inversiones_var_rel|default:"-" }}</td>
+                                                <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
+                                                <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
+                                                <td>{{ report.aum_pat_subito|default:"-" }}</td>
+                                                <td></td>
+                                            </tr>
+                                            <tr>
+                                                <td>........</td>
+                                                <th scope="col">Totales</th>
+                                                <td>&#36;{{ report.activos|floatformat:2|intcomma|default:"-" }}</td>
+                                                <td>&#36;{{ report.pasivos|floatformat:2|intcomma|default:"-" }}</td>
+                                                <td>&#36;{{ report.ingresos|floatformat:2|intcomma|default:"-" }}</td>
+                                                <td>&#36;{{ report.patrimonio|floatformat:2|intcomma|default:"-" }}</td>
+                                                <td>&#36;{{ report.banco_saldo|floatformat:2|intcomma|default:"-" }}</td>
+                                                <td>&#36;{{ report.bienes|floatformat:2|intcomma|default:"-" }}</td>
+                                                <td>&#36;{{ report.inversiones|floatformat:2|intcomma|default:"-" }}</td>
+                                                <td>{{ report.apalancamiento|floatformat:2|default:"-" }}</td>
+                                                <td>{{ report.endeudamiento|floatformat:2|default:"-" }}</td>
+                                                <td>&#36;{{ report.capital|floatformat:2|intcomma|default:"-" }}</td>
+                                                <td></td>
+                                            </tr>
+                                            <tr>
+                                                <td>........</td>
+                                                <th scope="col">Cantidad</th>
+                                                <td></td>
+                                                <td>{{ report.cant_deudas|default:"-" }}</td>
+                                                <td>{{ report.cant_ingresos|default:"-" }}</td>
+                                                <td></td>
+                                                <td>C{{ report.cant_cuentas|default:"-" }} B{{ report.cant_bancos|default:"-" }}</td>
+                                                <td>{{ report.cant_bienes|default:"-" }}</td>
+                                                <td>{{ report.cant_inversiones|default:"-" }}</td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                                <td></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="8" class="text-center py-4">
+                                <td colspan="13" class="text-center py-4">
                                     No hay reportes financieros disponibles
                                 </td>
                             </tr>
