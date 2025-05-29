@@ -119,6 +119,29 @@ class Conflict(models.Model):
         return f"Conflictos de {self.person.nombre_completo}"
 "@
 
+$templatetagsDir = "core\templatetags"
+New-Item -Path $templatetagsDir -ItemType Directory -Force
+Set-Content -Path "$templatetagsDir\__init__.py" -Value ""
+Set-Content -Path "$templatetags\number_filters.py" -Value @"
+from django import template
+
+register = template.Library()
+
+@register.filter
+def humanize_millions(value):
+    try:
+        value = float(value)
+        if value >= 1000000000:  # Billions
+            return f"{value/1000000000:.1f}B".replace(".0B", "B")
+        elif value >= 1000000:  # Millions
+            return f"{value/1000000:.1f}M".replace(".0M", "M")
+        elif value >= 1000:  # Thousands
+            return f"{value/1000:.1f}K".replace(".0K", "K")
+        return str(value)
+    except (ValueError, TypeError):
+        return value
+"@
+
 # Create views.py with import functionality
 Set-Content -Path "core/views.py" -Value @"
 from django.http import HttpResponse, HttpResponseRedirect
@@ -231,7 +254,6 @@ def main(request):
     }
     return render(request, 'persons.html', context)
 
-# Add to core/views.py
 def process_financial_data():
     """Process financial data from inTrends.xlsx and update FinancialReport model"""
     try:
@@ -409,7 +431,6 @@ def import_persons(request):
         'analysis_results': analysis_results
     })
 
-# In core/views.py, add this function
 def process_conflict_data():
     """Process conflict data from inTrends.xlsx and update Conflict model"""
     try:
@@ -2909,6 +2930,7 @@ body {
 # Create details template
 @"
 {% extends "master.html" %}
+{% load humanize %}
 
 {% block title %}Detalles - {{ myperson.nombre_completo }}{% endblock %}
 {% block navbar_title %}{{ myperson.nombre_completo }}{% endblock %}
@@ -3056,7 +3078,7 @@ body {
             <div class="card-header bg-light d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Reportes Financieros</h5>
                 <div>
-                    <span class="badge bg-primary">{{ financial_reports.count }} reportes</span>
+                    <span class="badge bg-primary">{{ financial_reports.count }} periodos</span>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -3065,127 +3087,78 @@ body {
                         <thead>
                             <tr>
                                 <th>Ano</th>
+                                <th scope="col">Variación</th>
                                 <th>Activos</th>
                                 <th>Pasivos</th>
                                 <th>Ingresos</th>
-                                <th>Capital</th>
                                 <th>Patrimonio</th>
-                                <th>Patrimonio Var Rel</th>
-                                <th>Detalles</th>
+                                <th>Banco</th>
+                                <th>Bienes</th>
+                                <th>Inversiones</th>
+                                <th>Apalancamiento</th>
+                                <th>Endeudamiento</th>
+                                <th>Indice</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for report in financial_reports %}
                             <tr>
                                 <td>{{ report.ano_declaracion }}</td>
-                                <td>&#36;{{ report.activos|floatformat:2|default:"-" }}</td>
-                                <td>&#36;{{ report.pasivos|floatformat:2|default:"-" }}</td>
-                                <td>&#36;{{ report.ingresos|floatformat:2|default:"-" }}</td>
-                                <td>&#36;{{ report.capital|floatformat:2|default:"-" }}</td>
-                                <td>&#36;{{ report.patrimonio|floatformat:2|default:"-" }}</td>
-                                <td>
-                                    {% if report.patrimonio_var_rel %}
-                                        {{ report.patrimonio_var_rel }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <a href="#report-{{ report.id }}"
-                                       class="btn btn-sm btn-custom-primary"
-                                       data-bs-toggle="collapse"
-                                       title="Ver detalles">
-                                        <i class="fas fa-chevron-down"></i>
-                                    </a>
-                                </td>
+                                <th>Relativa</th>
+                                <td>{{ report.activos_var_rel|default:"-" }}</td>
+                                <td>{{ report.pasivos_var_rel|default:"-" }}</td>
+                                <td>{{ report.ingresos_var_rel|default:"-" }}</td>
+                                <td>{{ report.patrimonio_var_rel|default:"-" }}</td>
+                                <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
+                                <td>{{ report.bienes_var_rel|default:"-" }}</td>
+                                <td>{{ report.inversiones_var_rel|default:"-" }}</td>
+                                <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
+                                <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
+                                <td>{{ report.aum_pat_subito|default:"-" }}</td>
                             </tr>
-                            <tr class="collapse" id="report-{{ report.id }}">
-                                <td colspan="8"> {# This colspan now spans 8 columns #}
-                                    <div class="p-3 bg-light">
-                                        {# Use a single row with cols for horizontal display of variations #}
-                                        <div class="row g-2"> {# g-2 for small gutter between columns #}
-                                            <div class="col-md-4">
-                                                <h6>Bancos y Bienes</h6>
-                                                <table class="table table-sm">
-                                                    <tr>
-                                                        <th>Saldo Bancario:</th>
-                                                        <td>&#36;{{ report.banco_saldo|floatformat:2|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Bienes:</th>
-                                                        <td>&#36;{{ report.bienes|floatformat:2|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Inversiones:</th>
-                                                        <td>&#36;{{ report.inversiones|floatformat:2|default:"-" }}</td>
-                                                    </tr>
-                                                </table>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <h6>Indicadores</h6>
-                                                <table class="table table-sm">
-                                                    <tr>
-                                                        <th>Apalancamiento:</th>
-                                                        <td>{{ report.apalancamiento|floatformat:2|default:"-" }}%</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Endeudamiento:</th>
-                                                        <td>{{ report.endeudamiento|floatformat:2|default:"-" }}%</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Ind. Aum. Pat. Subito:</th>
-                                                        <td>{{ report.aum_pat_subito|default:"-" }}</td>
-                                                    </tr>
-                                                </table>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <h6>Variaciones (Rel. / Abs.)</h6>
-                                                <table class="table table-sm">
-                                                    <tr>
-                                                        <th>Activos:</th>
-                                                        <td>Rel: {{ report.activos_var_rel|default:"-" }} / Abs: {{ report.activos_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Pasivos:</th>
-                                                        <td>Rel: {{ report.pasivos_var_rel|default:"-" }} / Abs: {{ report.pasivos_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Ingresos:</th>
-                                                        <td>Rel: {{ report.ingresos_var_rel|default:"-" }} / Abs: {{ report.ingresos_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Patrimonio:</th>
-                                                        <td>Rel: {{ report.patrimonio_var_rel|default:"-" }} / Abs: {{ report.patrimonio_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Saldo Bancario:</th>
-                                                        <td>Rel: {{ report.banco_saldo_var_rel|default:"-" }} / Abs: {{ report.banco_saldo_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Bienes:</th>
-                                                        <td>Rel: {{ report.bienes_var_rel|default:"-" }} / Abs: {{ report.bienes_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Inversiones:</th>
-                                                        <td>Rel: {{ report.inversiones_var_rel|default:"-" }} / Abs: {{ report.inversiones_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Apalancamiento:</th>
-                                                        <td>Rel: {{ report.apalancamiento_var_rel|default:"-" }} / Abs: {{ report.apalancamiento_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Endeudamiento:</th>
-                                                        <td>Rel: {{ report.endeudamiento_var_rel|default:"-" }} / Abs: {{ report.endeudamiento_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <th>Capital:</th>
-                                                        <td>Rel: {{ report.capital_var_rel|default:"-" }} / Abs: {{ report.capital_var_abs|default:"-" }}</td>
-                                                    </tr>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </td>
+                            <tr>
+                                <th></th>
+                                <th scope="col">Absoluta</th>
+                                <td>{{ report.activos_var_abs|intcomma|default:"-" }}</td>
+                                <td>{{ report.pasivos_var_abs|intcomma|default:"-" }}</td>
+                                <td>{{ report.ingresos_var_abs|intcomma|default:"-" }}</td>
+                                <td>{{ report.patrimonio_var_abs|intcomma|default:"-" }}</td>
+                                <td>{{ report.banco_saldo_var_abs|intcomma|default:"-" }}</td>
+                                <td>{{ report.bienes_var_abs|intcomma|default:"-" }}</td>
+                                <td>{{ report.inversiones_var_abs|intcomma|default:"-" }}</td>
+                                <td>{{ report.apalancamiento_var_abs|default:"-" }}</td>
+                                <td>{{ report.endeudamiento_var_abs|default:"-" }}</td>
+                                <td>{{ report.capital_var_abs|intcomma|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <td></td>
+                                <th scope="col">Total</th>
+                                <td>&#36;{{ report.activos|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.pasivos|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.ingresos|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.patrimonio|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.banco_saldo|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.bienes|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.inversiones|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>{{ report.apalancamiento|floatformat:2|default:"-" }}</td>
+                                <td>{{ report.endeudamiento|floatformat:2|default:"-" }}</td>
+                                <td>&#36;{{ report.capital|floatformat:2|intcomma|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th></th>
+                                <th scope="col">Cant.</th>
+                                <td></td>
+                                <td>{{ report.cant_deudas|default:"-" }}</td>
+                                <td>{{ report.cant_ingresos|default:"-" }}</td>
+                                <td></td>
+                                <td>C{{ report.cant_cuentas|default:"-" }} B{{ report.cant_bancos|default:"-" }}</td>
+                                <td>{{ report.cant_bienes|default:"-" }}</td>
+                                <td>{{ report.cant_inversiones|default:"-" }}</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                                
                             </tr>
                             {% empty %}
                             <tr>
@@ -3207,7 +3180,8 @@ body {
     # Update settings.py
     $settingsContent = Get-Content -Path ".\arpa\settings.py" -Raw
     $settingsContent = $settingsContent -replace "INSTALLED_APPS = \[", "INSTALLED_APPS = [
-    'core.apps.CoreConfig',"
+    'core.apps.CoreConfig',
+    'django.contrib.humanize',"
     $settingsContent = $settingsContent -replace "from pathlib import Path", "from pathlib import Path
 import os"
     $settingsContent | Set-Content -Path ".\arpa\settings.py"
