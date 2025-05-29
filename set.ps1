@@ -268,6 +268,21 @@ def process_financial_data():
         # Ensure Cedula is string type for comparison
         df['Cedula'] = df['Cedula'].astype(str)
         
+        def safe_convert(value):
+            """Convert a value to decimal, handling special cases"""
+            try:
+                # Handle numpy/pandas special values
+                if pd.isna(value) or pd.isnull(value):
+                    return None
+                if str(value).lower() in ['-inf', 'inf', 'infinity', '-infinity']:
+                    return None
+                if str(value).lower() == 'nan':
+                    return None
+                # Convert to float first to handle scientific notation, then to Decimal
+                return float(value)
+            except (ValueError, TypeError):
+                return None
+        
         for _, row in df.iterrows():
             try:
                 # Find the person by cedula
@@ -275,23 +290,23 @@ def process_financial_data():
                 if not person:
                     continue
                     
-                # Create or update financial report
+                # Create or update financial report with proper value handling
                 FinancialReport.objects.update_or_create(
                     person=person,
                     fkIdPeriodo=row.get('fkIdPeriodo'),
                     defaults={
                         'ano_declaracion': row.get('Año Declaración'),
                         'año_creacion': row.get('Año Creación'),
-                        'activos': row.get('Activos'),
-                        'cant_bienes': row.get('Cant_Bienes'),
-                        'cant_bancos': row.get('Cant_Bancos'),
-                        'cant_cuentas': row.get('Cant_Cuentas'),
-                        'cant_inversiones': row.get('Cant_Inversiones'),
-                        'pasivos': row.get('Pasivos'),
-                        'cant_deudas': row.get('Cant_Deudas'),
-                        'patrimonio': row.get('Patrimonio'),
-                        'apalancamiento': row.get('Apalancamiento'),
-                        'endeudamiento': row.get('Endeudamiento'),
+                        'activos': safe_convert(row.get('Activos')),
+                        'cant_bienes': safe_convert(row.get('Cant_Bienes')),
+                        'cant_bancos': safe_convert(row.get('Cant_Bancos')),
+                        'cant_cuentas': safe_convert(row.get('Cant_Cuentas')),
+                        'cant_inversiones': safe_convert(row.get('Cant_Inversiones')),
+                        'pasivos': safe_convert(row.get('Pasivos')),
+                        'cant_deudas': safe_convert(row.get('Cant_Deudas')),
+                        'patrimonio': safe_convert(row.get('Patrimonio')),
+                        'apalancamiento': safe_convert(row.get('Apalancamiento')),
+                        'endeudamiento': safe_convert(row.get('Endeudamiento')),
                         'aum_pat_subito': row.get('Aum. Pat. Subito'),
                         'activos_var_abs': row.get('Activos Var. Abs.'),
                         'activos_var_rel': row.get('Activos Var. Rel.'),
@@ -303,20 +318,20 @@ def process_financial_data():
                         'apalancamiento_var_rel': row.get('Apalancamiento Var. Rel.'),
                         'endeudamiento_var_abs': row.get('Endeudamiento Var. Abs.'),
                         'endeudamiento_var_rel': row.get('Endeudamiento Var. Rel.'),
-                        'banco_saldo': row.get('BancoSaldo'),
-                        'bienes': row.get('Bienes'),
-                        'inversiones': row.get('Inversiones'),
+                        'banco_saldo': safe_convert(row.get('BancoSaldo')),
+                        'bienes': safe_convert(row.get('Bienes')),
+                        'inversiones': safe_convert(row.get('Inversiones')),
                         'banco_saldo_var_abs': row.get('BancoSaldo Var. Abs.'),
                         'banco_saldo_var_rel': row.get('BancoSaldo Var. Rel.'),
                         'bienes_var_abs': row.get('Bienes Var. Abs.'),
                         'bienes_var_rel': row.get('Bienes Var. Rel.'),
                         'inversiones_var_abs': row.get('Inversiones Var. Abs.'),
                         'inversiones_var_rel': row.get('Inversiones Var. Rel.'),
-                        'ingresos': row.get('Ingresos'),
-                        'cant_ingresos': row.get('Cant_Ingresos'),
+                        'ingresos': safe_convert(row.get('Ingresos')),
+                        'cant_ingresos': safe_convert(row.get('Cant_Ingresos')),
                         'ingresos_var_abs': row.get('Ingresos Var. Abs.'),
                         'ingresos_var_rel': row.get('Ingresos Var. Rel.'),
-                        'capital': row.get('Capital'),
+                        'capital': safe_convert(row.get('Capital')),
                     }
                 )
             except Exception as e:
