@@ -445,18 +445,29 @@ def process_conflict_data():
         # Ensure Cedula is string type for comparison
         df['Cedula'] = df['Cedula'].astype(str)
         
+        # Replace NaN values in boolean columns with False
+        boolean_columns = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'Q11']
+        for col in boolean_columns:
+            if col in df.columns:
+                df[col] = df[col].fillna(False).astype(bool)
+        
         for _, row in df.iterrows():
             try:
                 # Find the person by cedula
                 person = Person.objects.filter(cedula=str(row['Cedula'])).first()
                 if not person:
                     continue
-                    
+                
+                # Handle date field - convert to None if invalid
+                fecha_inicio = row.get('Fecha de Inicio')
+                if pd.isna(fecha_inicio) or fecha_inicio == 'NaT' or fecha_inicio == 'nan':
+                    fecha_inicio = None
+                
                 # Create or update conflict report
                 Conflict.objects.update_or_create(
                     person=person,
                     defaults={
-                        'fecha_inicio': row.get('Fecha de Inicio'),
+                        'fecha_inicio': fecha_inicio,
                         'q1': row.get('Q1', False),
                         'q2': row.get('Q2', False),
                         'q3': row.get('Q3', False),
@@ -480,7 +491,6 @@ def process_conflict_data():
         print(f"Error processing conflict data: {str(e)}")
         return False
 
-# Then update the process_persons_data function to include conflict processing
 def process_persons_data(request):
     """
     Process data from inTrends.xlsx and update Person model, FinancialReport model, and Conflict model
@@ -2124,7 +2134,7 @@ def merge_conflicts_data(idtrends_file, conflicts_file, output_file):
         conflicts = pd.read_excel(conflicts_file)
 
         # Standardize column names (handle multiple possible email column names)
-        email_columns = ['Correo', 'Email', 'Correo Electrónico', 'E-mail']
+        email_columns = ['Correo', 'Email', 'Correo Electrónico', 'E-mail', 'Correo_x']
         
         # Find which email column exists in conflicts data
         conflicts_email_col = next((col for col in email_columns if col in conflicts.columns), None)
@@ -2139,13 +2149,18 @@ def merge_conflicts_data(idtrends_file, conflicts_file, output_file):
 
         # Ensure idtrends has the Correo column
         if 'Correo' not in idtrends.columns:
-            idtrends['Correo'] = ''  # Add empty column if missing
+            # Try to find email column in idtrends if 'Correo' doesn't exist
+            idtrends_email_col = next((col for col in email_columns if col in idtrends.columns), None)
+            if idtrends_email_col:
+                idtrends = idtrends.rename(columns={idtrends_email_col: 'Correo'})
+            else:
+                idtrends['Correo'] = ''  # Add empty column if missing
 
         # Perform a full outer join to keep all data from both tables
         merged = pd.merge(
             idtrends,
             conflicts,
-            on=['Cedula', 'Nombre', 'Cargo', 'Compania'],
+            on=['Cedula', 'Nombre', 'Cargo', 'Compania', 'Correo'],
             how='outer',
             indicator=True
         )
