@@ -100,7 +100,7 @@ class Conflict(models.Model):
     fecha_inicio = models.DateField(verbose_name="Fecha de Inicio", null=True, blank=True)
     q1 = models.BooleanField(verbose_name="Accionista de algún proveedor del grupo", default=False)
     q2 = models.BooleanField(verbose_name="Familiar accionista, proveedor, empleado", default=False)
-    q3 = models.BooleanField(verbose_name="Accionista de alguna compañía del grupo", default=False)
+    q3 = models.BooleanField(verbose_name="Accionista de alguna compania del grupo", default=False)
     q4 = models.BooleanField(verbose_name="Actividades extralaborales", default=False)
     q5 = models.BooleanField(verbose_name="Negocios o bienes con empleados del grupo", default=False)
     q6 = models.BooleanField(verbose_name="Participación en juntas o consejos directivos", default=False)
@@ -117,29 +117,6 @@ class Conflict(models.Model):
 
     def __str__(self):
         return f"Conflictos de {self.person.nombre_completo}"
-"@
-
-$templatetagsDir = "core\templatetags"
-New-Item -Path $templatetagsDir -ItemType Directory -Force
-Set-Content -Path "$templatetagsDir\__init__.py" -Value ""
-Set-Content -Path "$templatetags\number_filters.py" -Value @"
-from django import template
-
-register = template.Library()
-
-@register.filter
-def humanize_millions(value):
-    try:
-        value = float(value)
-        if value >= 1000000000:  # Billions
-            return f"{value/1000000000:.1f}B".replace(".0B", "B")
-        elif value >= 1000000:  # Millions
-            return f"{value/1000000:.1f}M".replace(".0M", "M")
-        elif value >= 1000:  # Thousands
-            return f"{value/1000:.1f}K".replace(".0K", "K")
-        return str(value)
-    except (ValueError, TypeError):
-        return value
 "@
 
 # Create views.py with import functionality
@@ -3134,14 +3111,27 @@ body {
                                 <th>Apalancamiento</th>
                                 <th>Endeudamiento</th>
                                 <th>Indice</th>
-                                <th>Details</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for report in financial_reports %}
-                            <tr data-bs-toggle="collapse" data-bs-target="#details-{{ report.ano_declaracion }}" aria-expanded="false" aria-controls="details-{{ report.ano_declaracion }}" style="cursor: pointer;">
+                            <tr>
                                 <td>{{ report.ano_declaracion }}</td>
-                                <th>Absolutas</th>
+                                <th>Relativa</th>
+                                <td>{{ report.activos_var_rel|default:"-" }}</td>
+                                <td>{{ report.pasivos_var_rel|default:"-" }}</td>
+                                <td>{{ report.ingresos_var_rel|default:"-" }}</td>
+                                <td>{{ report.patrimonio_var_rel|default:"-" }}</td>
+                                <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
+                                <td>{{ report.bienes_var_rel|default:"-" }}</td>
+                                <td>{{ report.inversiones_var_rel|default:"-" }}</td>
+                                <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
+                                <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
+                                <td>{{ report.aum_pat_subito|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th></th>
+                                <th scope="col">Absoluta</th>
                                 <td>{{ report.activos_var_abs|intcomma|default:"-" }}</td>
                                 <td>{{ report.pasivos_var_abs|intcomma|default:"-" }}</td>
                                 <td>{{ report.ingresos_var_abs|intcomma|default:"-" }}</td>
@@ -3152,68 +3142,40 @@ body {
                                 <td>{{ report.apalancamiento_var_abs|default:"-" }}</td>
                                 <td>{{ report.endeudamiento_var_abs|default:"-" }}</td>
                                 <td>{{ report.capital_var_abs|intcomma|default:"-" }}</td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#details-{{ report.ano_declaracion }}">
-                                        <i class="fas fa-chevron-down"></i>
-                                    </button>
-                                </td>
                             </tr>
-                            <tr class="collapse" id="details-{{ report.ano_declaracion }}">
-                                <td colspan="13" class="p-0">
-                                    <table class="table table-borderless mb-0">
-                                        <tbody>
-                                            <tr>
-                                                <td>........</td>
-                                                <th scope="col">Relativas</th>
-                                                <td>{{ report.activos_var_rel|default:"-" }}</td>
-                                                <td>{{ report.pasivos_var_rel|default:"-" }}</td>
-                                                <td>{{ report.ingresos_var_rel|default:"-" }}</td>
-                                                <td>{{ report.patrimonio_var_rel|default:"-" }}</td>
-                                                <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
-                                                <td>{{ report.bienes_var_rel|default:"-" }}</td>
-                                                <td>{{ report.inversiones_var_rel|default:"-" }}</td>
-                                                <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
-                                                <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
-                                                <td>{{ report.aum_pat_subito|default:"-" }}</td>
-                                                <td></td>
-                                            </tr>
-                                            <tr>
-                                                <td>........</td>
-                                                <th scope="col">Totales</th>
-                                                <td>&#36;{{ report.activos|floatformat:2|intcomma|default:"-" }}</td>
-                                                <td>&#36;{{ report.pasivos|floatformat:2|intcomma|default:"-" }}</td>
-                                                <td>&#36;{{ report.ingresos|floatformat:2|intcomma|default:"-" }}</td>
-                                                <td>&#36;{{ report.patrimonio|floatformat:2|intcomma|default:"-" }}</td>
-                                                <td>&#36;{{ report.banco_saldo|floatformat:2|intcomma|default:"-" }}</td>
-                                                <td>&#36;{{ report.bienes|floatformat:2|intcomma|default:"-" }}</td>
-                                                <td>&#36;{{ report.inversiones|floatformat:2|intcomma|default:"-" }}</td>
-                                                <td>{{ report.apalancamiento|floatformat:2|default:"-" }}</td>
-                                                <td>{{ report.endeudamiento|floatformat:2|default:"-" }}</td>
-                                                <td>&#36;{{ report.capital|floatformat:2|intcomma|default:"-" }}</td>
-                                                <td></td>
-                                            </tr>
-                                            <tr>
-                                                <td>........</td>
-                                                <th scope="col">Cantidad</th>
-                                                <td></td>
-                                                <td>{{ report.cant_deudas|default:"-" }}</td>
-                                                <td>{{ report.cant_ingresos|default:"-" }}</td>
-                                                <td></td>
-                                                <td>C{{ report.cant_cuentas|default:"-" }} B{{ report.cant_bancos|default:"-" }}</td>
-                                                <td>{{ report.cant_bienes|default:"-" }}</td>
-                                                <td>{{ report.cant_inversiones|default:"-" }}</td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                                <td></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </td>
+                            <tr>
+                                <td></td>
+                                <th scope="col">Total</th>
+                                <td>&#36;{{ report.activos|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.pasivos|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.ingresos|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.patrimonio|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.banco_saldo|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.bienes|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>&#36;{{ report.inversiones|floatformat:2|intcomma|default:"-" }}</td>
+                                <td>{{ report.apalancamiento|floatformat:2|default:"-" }}</td>
+                                <td>{{ report.endeudamiento|floatformat:2|default:"-" }}</td>
+                                <td>&#36;{{ report.capital|floatformat:2|intcomma|default:"-" }}</td>
+                            </tr>
+                            <tr>
+                                <th></th>
+                                <th scope="col">Cant.</th>
+                                <td></td>
+                                <td>{{ report.cant_deudas|default:"-" }}</td>
+                                <td>{{ report.cant_ingresos|default:"-" }}</td>
+                                <td></td>
+                                <td>C{{ report.cant_cuentas|default:"-" }} B{{ report.cant_bancos|default:"-" }}</td>
+                                <td>{{ report.cant_bienes|default:"-" }}</td>
+                                <td>{{ report.cant_inversiones|default:"-" }}</td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                                
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="13" class="text-center py-4">
+                                <td colspan="8" class="text-center py-4">
                                     No hay reportes financieros disponibles
                                 </td>
                             </tr>
