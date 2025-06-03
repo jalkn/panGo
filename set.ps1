@@ -493,7 +493,7 @@ def process_persons_data(request):
         
         if not os.path.exists(inTrends_path):
             messages.error(request, 'El archivo inTrends.xlsx no existe. Por favor importe los datos primero.')
-            return HttpResponseRedirect('/persons/')
+            return HttpResponseRedirect('/persons/import/')
             
         # Read the inTrends file
         df = pd.read_excel(inTrends_path)
@@ -515,7 +515,7 @@ def process_persons_data(request):
         missing_cols = [col for col in column_mapping.keys() if col not in df.columns]
         if missing_cols:
             messages.error(request, f'El archivo inTrends.xlsx no tiene las columnas requeridas: {", ".join(missing_cols)}')
-            return HttpResponseRedirect('/persons/')
+            return HttpResponseRedirect('/persons/import/')
         
         # Rename columns to match model
         df.rename(columns=column_mapping, inplace=True)
@@ -581,7 +581,7 @@ def process_persons_data(request):
         import traceback
         traceback.print_exc()
     
-    return HttpResponseRedirect('/persons/')
+    return HttpResponseRedirect('/persons/import/')
 
 def export_to_excel(request):
     """
@@ -988,8 +988,8 @@ urlpatterns = [
     $directories = @(
         "core/src",
         "core/static",
-        "core/static/core",
-        "core/static/core/css",
+        "core/static/css",
+        "core/static/js",
         "core/templates",
         "core/templates/admin"
     )
@@ -2004,20 +2004,19 @@ def calculate_yearly_variations(df):
     
     return df
 
-# Add this function to trends.py
 def calculate_sudden_wealth_increase(df):
-    """Calculate sudden wealth increase rate (Aum. Pat. Subito)"""
+    """Calculate sudden wealth increase rate (Aum. Pat. Subito) as decimal with 1 decimal place"""
     df = df.sort_values(['Usuario', 'Año Declaración'])
     
     # Calculate total wealth (Activo + Patrimonio)
     df['Capital'] = df['Activos'] + df['Patrimonio']
     
-    # Calculate year-to-year change
-    df['Aum. Pat. Subito'] = df.groupby('Usuario')['Capital'].pct_change(fill_method=None) * 100
+    # Calculate year-to-year change as decimal
+    df['Aum. Pat. Subito'] = df.groupby('Usuario')['Capital'].pct_change(fill_method=None)
     
-    # Format as percentage with trend symbol
+    # Format as decimal (1 place) with trend symbol
     df['Aum. Pat. Subito'] = df['Aum. Pat. Subito'].apply(
-        lambda x: f"{x:.2f}% {get_trend_symbol(f'{x}%')}" if not pd.isna(x) else "N/A ➡️"
+        lambda x: f"{x:.1f} {get_trend_symbol(f'{x*100:.1f}%')}" if not pd.isna(x) else "N/A ➡️"
     )
     
     return df
@@ -2364,7 +2363,7 @@ extract_specific_columns(
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     {% load static %}
-    <link rel="stylesheet" href="{% static 'core/css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
 <body>
     <div class="topnav-container">
@@ -2588,7 +2587,69 @@ body {
 .bg-danger {
     background-color: #dc3545 !important;
 }
-"@ | Out-File -FilePath "core/static/core/css/style.css" -Encoding utf8
+"@ | Out-File -FilePath "core/static/css/style.css" -Encoding utf8
+
+@"
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 9999;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+.loading-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    max-width: 500px;
+    width: 90%;
+}
+
+.progress {
+    height: 20px;
+    margin: 20px 0;
+}
+
+/* Spinner styles for submit buttons */
+.btn .spinner-border {
+    margin-right: 8px;
+}
+"@ | Out-File -FilePath "core/static/css/loading.css" -Encoding utf8
+
+# Create loading.js
+@"
+document.addEventListener('DOMContentLoaded', function() {
+    // Get all forms that should show loading
+    const forms = document.querySelectorAll('form');
+    
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            // Only show loading for forms that aren't the search form
+            if (!form.classList.contains('no-loading')) {
+                // Show loading overlay
+                const loadingOverlay = document.getElementById('loadingOverlay');
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = 'flex';
+                }
+                
+                // Optional: Disable submit button to prevent double submission
+                const submitButton = form.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
+                }
+            }
+        });
+    });
+});
+"@ | Out-File -FilePath "core/static/js/loading.js" -Encoding utf8
 
     # Create persons template
 @" 
@@ -2599,12 +2660,6 @@ body {
 
 {% block navbar_buttons %}
 <div>
-    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-custom-primary">
-                <i class="fas fa-database"></i>
-            </button>
-    </form>
     <a href="/finance/" class="btn btn-custom-primary">
         <i class="fas fa-chart-line" style="color: green;"></i>
     </a>
@@ -2823,6 +2878,12 @@ body {
 
 {% block navbar_buttons %}
 <div>
+    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-custom-primary">
+                <i class="fas fa-database"></i>
+            </button>
+    </form>
     <a href="/" class="btn btn-custom-primary">
         <i class="fas fa-arrow-right"></i>
     </a>
@@ -2830,6 +2891,25 @@ body {
 {% endblock %}
 
 {% block content %}
+{% load static %}
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+        <h4>Procesando datos...</h4>
+        <div class="progress">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                 role="progressbar" 
+                 style="width: 100%"></div>
+        </div>
+        <p>Por favor espere, esto puede tomar unos segundos.</p>
+    </div>
+</div>
+
+<!-- Add loading CSS -->
+<link rel="stylesheet" href="{% static 'css/loading.css' %}">
+
+<!-- Add loading JS -->
+<script src="{% static 'js/loading.js' %}"></script>
+
 <div class="row">
     <div class="col-md-4 mb-4">
         <div class="card h-100">
@@ -2991,7 +3071,7 @@ body {
                     {% else %}
                     <div class="text-center py-4">
                         <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No hay resultados de anÃ¡lisis disponibles</p>
+                        <p class="text-muted">No hay resultados de análisis disponibles</p>
                     </div>
                     {% endif %}
                 </div>
@@ -3549,7 +3629,7 @@ body {
 <!-- Search Form -->
 <div class="card mb-4 border-0 shadow" style="background-color:rgb(224, 224, 224);">
     <div class="card-body">
-        <form method="get" action="." class="row g-3 align-items-center">
+        <form method="get" action="." class="row g-3 align-items-center no-loading">
             <!-- General Search -->
             <div class="col-md-4">
                 <input type="text" 
@@ -3646,7 +3726,7 @@ body {
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q6&sort_direction={% if current_order == 'conflicts__q6' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Participación en juntas
+                                Participacion en juntas
                             </a>
                         </th>
                         <th>
@@ -3656,12 +3736,12 @@ body {
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q8&sort_direction={% if current_order == 'conflicts__q8' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Conoce código de conducta
+                                Conoce codigo de conducta
                             </a>
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q9&sort_direction={% if current_order == 'conflicts__q9' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Veracidad de información
+                                Veracidad de informacion
                             </a>
                         </th>
                         <th>
@@ -3671,7 +3751,7 @@ body {
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q11&sort_direction={% if current_order == 'conflicts__q11' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Relación con sector público
+                                Relación con sector publico
                             </a>
                         </th>
                         <th style="color: rgb(0, 0, 0);">Comentarios</th>
@@ -3811,7 +3891,7 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
     # Create superuser
     #python manage.py createsuperuser
 
-    #python manage.py collectstatic --noinput
+    python manage.py collectstatic --noinput
 
     # Start the server
     Write-Host "🚀 Starting Django development server..." -ForegroundColor $GREEN
