@@ -2651,9 +2651,46 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 "@ | Out-File -FilePath "core/static/js/loading.js" -Encoding utf8
 
-    # Create persons template
+# Create excelExport.js
+@'
+document.addEventListener("DOMContentLoaded", function() {
+    const exportExcelBtn = document.getElementById("exportExcelBtn");
+    
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener("click", function() {
+            // Get all current filter parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Construct the export URL with all current filters
+            let exportUrl = '/persons/export/?';
+            
+            // Add all existing query parameters
+            urlParams.forEach((value, key) => {
+                exportUrl += `${key}=${encodeURIComponent(value)}&`;
+            });
+            
+            // Remove trailing '&' if present
+            exportUrl = exportUrl.replace(/&$/, '');
+            
+            // Create a temporary link to trigger the download
+            const link = document.createElement("a");
+            link.href = exportUrl;
+            link.target = "_blank";
+            link.download = "personas_export.xlsx";
+            
+            // Append to body, click and remove
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    }
+});
+'@ | Out-File -FilePath "core/static/js/excelExport.js" -Encoding utf8
+
+# Create persons template
 @" 
 {% extends "master.html" %}
+{% load static %}
 
 {% block title %}A R P A{% endblock %}
 {% block navbar_title %}A R P A{% endblock %}
@@ -2673,9 +2710,9 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
         <i class="fas fa-upload"></i>
     </a>
-    <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary" title="Exportar a Excel">  
+    <button id="exportExcelBtn" class="btn btn-custom-primary" title="Exportar a Excel">  
         <i class="fas fa-file-excel" style="color: green;"></i>
-    </a>
+    </button>
     <a href="/alerts/" class="btn btn-custom-primary">
         <i class="fas fa-bell" style="color: red;"></i>
     </a>
@@ -2867,9 +2904,13 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/excelExport.js' %}"></script>
+{% endblock %}
 "@ | Out-File -FilePath "core/templates/persons.html" -Encoding utf8 -Force
 
-# Create import template
+#Create import template
 @"
 {% extends "master.html" %}
 
@@ -3343,12 +3384,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block navbar_buttons %}
 <div>
-    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-custom-primary">
-                <i class="fas fa-database"></i>
-            </button>
-    </form>
     <a href="/persons/" class="btn btn-custom-primary">
         <i class="fas fa-users"></i>
     </a>
@@ -3601,12 +3636,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block navbar_buttons %}
 <div>
-    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-custom-primary">
-                <i class="fas fa-database"></i>
-            </button>
-    </form>
     <a href="/persons/" class="btn btn-custom-primary">
         <i class="fas fa-users"></i>
     </a>
@@ -3872,7 +3901,7 @@ import os"
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
-    BASE_DIR / "core/static",
+    os.path.join(BASE_DIR, 'core/static'),
 ]
 
 MEDIA_URL = 'media/'
