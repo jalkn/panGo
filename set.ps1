@@ -493,7 +493,7 @@ def process_persons_data(request):
         
         if not os.path.exists(inTrends_path):
             messages.error(request, 'El archivo inTrends.xlsx no existe. Por favor importe los datos primero.')
-            return HttpResponseRedirect('/persons/import/')
+            return HttpResponseRedirect('/persons/')
             
         # Read the inTrends file
         df = pd.read_excel(inTrends_path)
@@ -515,7 +515,7 @@ def process_persons_data(request):
         missing_cols = [col for col in column_mapping.keys() if col not in df.columns]
         if missing_cols:
             messages.error(request, f'El archivo inTrends.xlsx no tiene las columnas requeridas: {", ".join(missing_cols)}')
-            return HttpResponseRedirect('/persons/import/')
+            return HttpResponseRedirect('/persons/')
         
         # Rename columns to match model
         df.rename(columns=column_mapping, inplace=True)
@@ -581,7 +581,7 @@ def process_persons_data(request):
         import traceback
         traceback.print_exc()
     
-    return HttpResponseRedirect('/persons/import/')
+    return HttpResponseRedirect('/persons/')
 
 def export_to_excel(request):
     """
@@ -811,6 +811,54 @@ def import_conflict_excel(request):
         return HttpResponseRedirect('/persons/import/')
     
     return HttpResponseRedirect('/persons/import/')
+
+def finance_view(request):
+    """View showing financial data with filtering and pagination"""
+    persons = Person.objects.all().prefetch_related('financial_reports')
+    persons = _apply_filters_and_sorting(persons, request.GET)
+    
+    # Get dropdown values
+    dropdown_values = _get_dropdown_values()
+    
+    # Pagination
+    paginator = Paginator(persons, 1000)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'persons': page_obj.object_list,
+        'persons_count': persons.count(),
+        'current_order': request.GET.get('order_by', 'nombre_completo').replace('-', ''),
+        'current_direction': request.GET.get('sort_direction', 'asc'),
+        'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
+        **dropdown_values
+    }
+    return render(request, 'finance.html', context)
+
+def conflicts_view(request):
+    """View showing conflicts data with filtering and pagination"""
+    persons = Person.objects.all().prefetch_related('conflicts')
+    persons = _apply_filters_and_sorting(persons, request.GET)
+    
+    # Get dropdown values
+    dropdown_values = _get_dropdown_values()
+    
+    # Pagination
+    paginator = Paginator(persons, 1000)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'persons': page_obj.object_list,
+        'persons_count': persons.count(),
+        'current_order': request.GET.get('order_by', 'nombre_completo').replace('-', ''),
+        'current_direction': request.GET.get('sort_direction', 'asc'),
+        'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
+        **dropdown_values
+    }
+    return render(request, 'conflicts.html', context)
 "@
 
     # Create urls.py for core app
@@ -827,6 +875,8 @@ urlpatterns = [
     path('persons/export/', views.export_to_excel, name='export_excel'),
     path('persons/import-conflicts/', views.import_conflict_excel, name='import_conflict_excel'),
     path('persons/import-period/', views.import_period_excel, name='import_period_excel'),
+    path('finance/', views.finance_view, name='finance_view'),
+    path('conflicts/', views.conflicts_view, name='conflicts_view'),
 ]
 "@
 
@@ -2548,15 +2598,33 @@ body {
 {% block navbar_title %}A R P A{% endblock %}
 
 {% block navbar_buttons %}
-<a href="/admin/" class="btn btn-outline-dark btn-lg text-start" title="Admin Panel">
-    <i class="fas fa-wrench"></i>
-</a>
-<a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
-    <i class="fas fa-upload"></i>
-</a>
-<a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">  
-    <i class="fas fa-file-excel"></i>
-</a>
+<div>
+    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-custom-primary">
+                <i class="fas fa-database"></i>
+            </button>
+    </form>
+    <a href="/finance/" class="btn btn-custom-primary">
+        <i class="fas fa-chart-line" style="color: green;"></i>
+    </a>
+    <a href="/conflicts/" class="btn btn-custom-primary">
+        <i class="fas fa-balance-scale" style="color: orange;"></i>
+    </a>
+    <!--
+    <a href="/admin/" class="btn btn-custom-primary btn-lg text-start" title="Admin Panel">
+        <i class="fas fa-wrench"></i>
+    </a>-->
+    <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
+        <i class="fas fa-upload"></i>
+    </a>
+    <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary" title="Exportar a Excel">  
+        <i class="fas fa-file-excel" style="color: green;"></i>
+    </a>
+    <a href="/alerts/" class="btn btn-custom-primary">
+        <i class="fas fa-bell" style="color: red;"></i>
+    </a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -2569,7 +2637,7 @@ body {
                 <input type="text" 
                        name="q" 
                        class="form-control form-control-lg" 
-                       placeholder="Buscar..." 
+                       placeholder="Buscar persona..." 
                        value="{{ request.GET.q }}">
             </div>
             
@@ -2755,13 +2823,9 @@ body {
 
 {% block navbar_buttons %}
 <div>
-    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-custom-primary">
-            <i class="fas fa-database"></i>
-        </button>
-    </form>
-    <a href="/" class="btn btn-custom-primary"><i class="fas fa-arrow-right"></i></a>
+    <a href="/" class="btn btn-custom-primary">
+        <i class="fas fa-arrow-right"></i>
+    </a>
 </div>
 {% endblock %}
 
@@ -3031,47 +3095,47 @@ body {
                             </tr>
                             <tr>
                                 <th scope="row">Accionista de algun proveedor del grupo</th>
-                                <td>{% if conflict.q1 %}<i class="text-danger">SI</i>{% else %}<i class="text-success">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Familiar de algun accionista, proveedor o empleado</th>
-                                <td>{% if conflict.q2 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Accionista de alguna companiÃ‚Â­a del grupo</th>
-                                <td>{% if conflict.q3 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
+                                <th scope="row">Accionista de alguna compani­a del grupo</th>
+                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Actividades extralaborales</th>
-                                <td>{% if conflict.q4 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Negocios o bienes con empleados del grupo</th>
-                                <td>{% if conflict.q5 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Participacion en juntas o consejos directivos</th>
-                                <td>{% if conflict.q6 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Potencial conflicto diferente a los anteriores</th>
-                                <td>{% if conflict.q7 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Consciente del codigo de conducta empresarial</th>
-                                <td>{% if conflict.q8 %}<i class="text-success">SI</i>{% else %}<i class=" text-danger">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q8 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Veracidad de la informacion consignada</th>
-                                <td>{% if conflict.q9 %}<i class="text-success">SI</i>{% else %}<i class=" text-danger">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q8 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Familiar de algun funcionario publico</th>
-                                <td>{% if conflict.q10 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Relacion con el sector publico o funcionario publico</th>
-                                <td>{% if conflict.q11 %}<i class="text-danger">SI</i>{% else %}<i class=" text-success">NO</i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -3189,6 +3253,528 @@ body {
 </div>
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/details.html" -Encoding utf8
+
+# Create finances template
+@"
+{% extends "master.html" %}
+
+{% block title %}Bienes y Rentas{% endblock %}
+{% block navbar_title %}Bienes y Rentas{% endblock %}
+
+{% block navbar_buttons %}
+<div>
+    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-custom-primary">
+                <i class="fas fa-database"></i>
+            </button>
+    </form>
+    <a href="/persons/" class="btn btn-custom-primary">
+        <i class="fas fa-users"></i>
+    </a>
+    <a href="/conflicts/" class="btn btn-custom-primary">
+        <i class="fas fa-balance-scale" style="color: orange;"></i>
+    </a>
+    <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
+        <i class="fas fa-upload"></i>
+    </a>
+    <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary" title="Exportar a Excel">  
+        <i class="fas fa-file-excel" style="color: green;"></i>
+    </a>
+    <a href="/alerts/" class="btn btn-custom-primary">
+        <i class="fas fa-bell" style="color: red;"></i>
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Search Form -->
+<div class="card mb-4 border-0 shadow" style="background-color:rgb(224, 224, 224);">
+    <div class="card-body">
+        <form method="get" action="." class="row g-3 align-items-center">
+            <!-- General Search -->
+            <div class="col-md-4">
+                <input type="text" 
+                       name="q" 
+                       class="form-control form-control-lg" 
+                       placeholder="Buscar persona..." 
+                       value="{{ request.GET.q }}">
+            </div>
+            
+            <!-- Status Filter -->
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-lg">
+                    <option value="">Estado</option>
+                    <option value="Activo" {% if request.GET.status == 'Activo' %}selected{% endif %}>Activo</option>
+                    <option value="Retirado" {% if request.GET.status == 'Retirado' %}selected{% endif %}>Retirado</option>
+                </select>
+            </div>
+            
+            <!-- Cargo Filter -->
+            <div class="col-md-2">
+                <select name="cargo" class="form-select form-select-lg">
+                    <option value="">Cargo</option>
+                    {% for cargo in cargos %}
+                        <option value="{{ cargo }}" {% if request.GET.cargo == cargo %}selected{% endif %}>{{ cargo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Compania Filter -->
+            <div class="col-md-2">
+                <select name="compania" class="form-select form-select-lg">
+                    <option value="">Compania</option>
+                    {% for compania in companias %}
+                        <option value="{{ compania }}" {% if request.GET.compania == compania %}selected{% endif %}>{{ compania }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Submit Buttons -->
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-filter"></i></button>
+                <a href="." class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-undo"></i></a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Persons Table -->
+<div class="card border-0 shadow">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=revisar&sort_direction={% if current_order == 'revisar' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Revisar
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=nombre_completo&sort_direction={% if current_order == 'nombre_completo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Nombre
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=compania&sort_direction={% if current_order == 'compania' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Compania
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__ano_declaracion&sort_direction={% if current_order == 'financial_reports__ano_declaracion' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Ano
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__aum_pat_subito&sort_direction={% if current_order == 'financial_reports__aum_pat_subito' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Aum. Pat. Subito
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__activos_var_rel&sort_direction={% if current_order == 'financial_reports__activos_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Activos Var. Rel.
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__pasivos_var_rel&sort_direction={% if current_order == 'financial_reports__pasivos_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Pasivos Var. Rel.
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__patrimonio_var_rel&sort_direction={% if current_order == 'financial_reports__patrimonio_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Patrimonio Var. Rel.
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__apalancamiento_var_rel&sort_direction={% if current_order == 'financial_reports__apalancamiento_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Apalancamiento Var. Rel.
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__endeudamiento_var_rel&sort_direction={% if current_order == 'financial_reports__endeudamiento_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Endeudamiento Var. Rel.
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__banco_saldo_var_rel&sort_direction={% if current_order == 'financial_reports__banco_saldo_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                BancoSaldo Var. Rel.
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__bienes_var_rel&sort_direction={% if current_order == 'financial_reports__bienes_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Bienes Var. Rel.
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__inversiones_var_rel&sort_direction={% if current_order == 'financial_reports__inversiones_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Inversiones Var. Rel.
+                            </a>
+                        </th>
+                        <th style="color: rgb(0, 0, 0);">Comentarios</th>
+                        <th style="color: rgb(0, 0, 0);">Ver</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for person in persons %}
+                        {% for report in person.financial_reports.all %}
+                        <tr {% if person.revisar %}class="table-warning"{% endif %}>
+                            <td>
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisión{% else %}No marcado{% endif %}">
+                                    <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}" style="padding-left: 20px;"></i>
+                                </a>
+                            </td>
+                            <td>{{ person.nombre_completo }}</td>
+                            <td>{{ person.compania }}</td>
+                            <td>{{ report.ano_declaracion|default:"-" }}</td>
+                            <td>{{ report.aum_pat_subito|default:"-" }}</td>
+                            <td>{{ report.activos_var_rel|default:"-" }}</td>
+                            <td>{{ report.pasivos_var_rel|default:"-" }}</td>
+                            <td>{{ report.patrimonio_var_rel|default:"-" }}</td>
+                            <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
+                            <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
+                            <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
+                            <td>{{ report.bienes_var_rel|default:"-" }}</td>
+                            <td>{{ report.inversiones_var_rel|default:"-" }}</td>
+                            <td>{{ person.comments|truncatechars:30|default:"" }}</td>
+                            <td>
+                                <a href="/persons/details/{{ person.cedula }}/" 
+                                   class="btn btn-custom-primary btn-sm"
+                                   title="View details">
+                                    <i class="bi bi-person-vcard-fill"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="14">{{ person.nombre_completo }} - No hay reportes financieros</td>
+                        </tr>
+                        {% endfor %}
+                    {% empty %}
+                        <tr>
+                            <td colspan="14" class="text-center py-4">
+                                {% if request.GET.q or request.GET.status or request.GET.cargo or request.GET.compania %}
+                                    Sin registros que coincidan con los filtros.
+                                {% else %}
+                                    Sin registros
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="p-3">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+"@ | Out-File -FilePath "core/templates/finance.html" -Encoding utf8
+
+# Create conflicts template
+@"
+{% extends "master.html" %}
+
+{% block title %}Conflictos de Interes{% endblock %}
+{% block navbar_title %}Conflictos de Interes{% endblock %}
+
+{% block navbar_buttons %}
+<div>
+    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-custom-primary">
+                <i class="fas fa-database"></i>
+            </button>
+    </form>
+    <a href="/persons/" class="btn btn-custom-primary">
+        <i class="fas fa-users"></i>
+    </a>
+    <a href="/finance/" class="btn btn-custom-primary">
+        <i class="fas fa-chart-line" style="color: green;"></i>
+    </a>
+    <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
+        <i class="fas fa-upload"></i>
+    </a>
+    <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary" title="Exportar a Excel">  
+        <i class="fas fa-file-excel" style="color: green;"></i>
+    </a>
+    <a href="/alerts/" class="btn btn-custom-primary">
+        <i class="fas fa-bell" style="color: red;"></i>
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Search Form -->
+<div class="card mb-4 border-0 shadow" style="background-color:rgb(224, 224, 224);">
+    <div class="card-body">
+        <form method="get" action="." class="row g-3 align-items-center">
+            <!-- General Search -->
+            <div class="col-md-4">
+                <input type="text" 
+                       name="q" 
+                       class="form-control form-control-lg" 
+                       placeholder="Buscar..." 
+                       value="{{ request.GET.q }}">
+            </div>
+            
+            <!-- Status Filter -->
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-lg">
+                    <option value="">Estado</option>
+                    <option value="Activo" {% if request.GET.status == 'Activo' %}selected{% endif %}>Activo</option>
+                    <option value="Retirado" {% if request.GET.status == 'Retirado' %}selected{% endif %}>Retirado</option>
+                </select>
+            </div>
+            
+            <!-- Cargo Filter -->
+            <div class="col-md-2">
+                <select name="cargo" class="form-select form-select-lg">
+                    <option value="">Cargo</option>
+                    {% for cargo in cargos %}
+                        <option value="{{ cargo }}" {% if request.GET.cargo == cargo %}selected{% endif %}>{{ cargo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Compania Filter -->
+            <div class="col-md-2">
+                <select name="compania" class="form-select form-select-lg">
+                    <option value="">Compania</option>
+                    {% for compania in companias %}
+                        <option value="{{ compania }}" {% if request.GET.compania == compania %}selected{% endif %}>{{ compania }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Submit Buttons -->
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-filter"></i></button>
+                <a href="." class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-undo"></i></a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Conflicts Table -->
+<div class="card border-0 shadow">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=revisar&sort_direction={% if current_order == 'revisar' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Revisar
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=nombre_completo&sort_direction={% if current_order == 'nombre_completo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Nombre
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=compania&sort_direction={% if current_order == 'compania' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Compania
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q1&sort_direction={% if current_order == 'conflicts__q1' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Accionista de proveedor
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q2&sort_direction={% if current_order == 'conflicts__q2' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Familiar de accionista/empleado
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q3&sort_direction={% if current_order == 'conflicts__q3' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Accionista del grupo
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q4&sort_direction={% if current_order == 'conflicts__q4' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Actividades extralaborales
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q5&sort_direction={% if current_order == 'conflicts__q5' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Negocios con empleados
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q6&sort_direction={% if current_order == 'conflicts__q6' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Participación en juntas
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q7&sort_direction={% if current_order == 'conflicts__q7' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Otro conflicto
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q8&sort_direction={% if current_order == 'conflicts__q8' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Conoce código de conducta
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q9&sort_direction={% if current_order == 'conflicts__q9' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Veracidad de información
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q10&sort_direction={% if current_order == 'conflicts__q10' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Familiar de funcionario
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q11&sort_direction={% if current_order == 'conflicts__q11' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Relación con sector público
+                            </a>
+                        </th>
+                        <th style="color: rgb(0, 0, 0);">Comentarios</th>
+                        <th style="color: rgb(0, 0, 0);">Ver</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for person in persons %}
+                        {% for conflict in person.conflicts.all %}
+                        <tr {% if person.revisar %}class="table-warning"{% endif %}>
+                            <td>
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisión{% else %}No marcado{% endif %}">
+                                    <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}" style="padding-left: 20px;"></i>
+                                </a>
+                            </td>
+                            <td>{{ person.nombre_completo }}</td>
+                            <td>{{ person.compania }}</td>
+                            <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q2 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q3 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q4 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q5 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q6 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q7 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q8 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q9 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q10 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                            <td class="text-center">{% if conflict.q11 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                            <td>{{ person.comments|truncatechars:30|default:"" }}</td>
+                            <td>
+                                <a href="/persons/details/{{ person.cedula }}/" 
+                                   class="btn btn-custom-primary btn-sm"
+                                   title="View details">
+                                    <i class="bi bi-person-vcard-fill"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="14">{{ person.nombre_completo }} - No hay conflictos declarados</td>
+                        </tr>
+                        {% endfor %}
+                    {% empty %}
+                        <tr>
+                            <td colspan="14" class="text-center py-4">
+                                {% if request.GET.q or request.GET.status or request.GET.cargo or request.GET.compania %}
+                                    Sin registros que coincidan con los filtros.
+                                {% else %}
+                                    Sin registros
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="p-3">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+"@ | Out-File -FilePath "core/templates/conflicts.html" -Encoding utf8
 
     # Update settings.py
     $settingsContent = Get-Content -Path ".\arpa\settings.py" -Raw
