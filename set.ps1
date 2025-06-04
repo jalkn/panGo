@@ -108,7 +108,7 @@ class Conflict(models.Model):
     q8 = models.BooleanField(verbose_name="Consciente del código de conducta empresarial", default=False)
     q9 = models.BooleanField(verbose_name="Veracidad de la información consignada", default=False)
     q10 = models.BooleanField(verbose_name="Familiar de funcionario público", default=False)
-    q11 = models.BooleanField(verbose_name="Relación con el sector o funcionario público", default=False)
+    q11 = models.BooleanField(verbose_name="Relacion con el sector o funcionario público", default=False)
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -177,7 +177,7 @@ def import_period_excel(request):
     
     return HttpResponseRedirect('/persons/import/')
 
-def _apply_filters_and_sorting(queryset, request_params):
+def _apply_person_filters_and_sorting(queryset, request_params):
     """
     Helper function to apply filters and sorting to a queryset based on request parameters.
     """
@@ -218,6 +218,120 @@ def _apply_filters_and_sorting(queryset, request_params):
         
     return queryset
 
+def _apply_finance_filters_and_sorting(queryset, request_params):
+    """
+    Helper function to apply finance-specific filters and sorting to a queryset.
+    Handles column-based filtering with operators.
+    """
+    search_query = request_params.get('q', '')
+    column_filter = request_params.get('column', '')
+    operator = request_params.get('operator', '')
+    value = request_params.get('value', '')
+    order_by = request_params.get('order_by', 'nombre_completo')
+    sort_direction = request_params.get('sort_direction', 'asc')
+    
+    # Apply general search filter
+    if search_query:
+        queryset = queryset.filter(
+            Q(nombre_completo__icontains=search_query) |
+            Q(cedula__icontains=search_query) |
+            Q(compania__icontains=search_query))
+    
+    # Apply column-based filtering if all required parameters are present
+    if column_filter and operator and value:
+        try:
+            # Handle different operators
+            if operator == '>':
+                queryset = queryset.filter(**{f'financial_reports__{column_filter}__gt': float(value)})
+            elif operator == '<':
+                queryset = queryset.filter(**{f'financial_reports__{column_filter}__lt': float(value)})
+            elif operator == '=':
+                queryset = queryset.filter(**{f'financial_reports__{column_filter}': float(value)})
+            elif operator == '>=':
+                queryset = queryset.filter(**{f'financial_reports__{column_filter}__gte': float(value)})
+            elif operator == '<=':
+                queryset = queryset.filter(**{f'financial_reports__{column_filter}__lte': float(value)})
+            elif operator == 'between':
+                # For between operator, value should be two numbers separated by comma
+                values = [v.strip() for v in value.split(',')]
+                if len(values) == 2:
+                    queryset = queryset.filter(
+                        **{f'financial_reports__{column_filter}__gte': float(values[0])}
+                    ).filter(
+                        **{f'financial_reports__{column_filter}__lte': float(values[1])}
+                    )
+            elif operator == 'contains':
+                queryset = queryset.filter(**{f'financial_reports__{column_filter}__icontains': value})
+        except (ValueError, TypeError):
+            # If conversion fails, skip this filter
+            pass
+    
+    # Apply sorting - handle both person fields and financial report fields
+    if order_by:
+        if order_by.startswith('financial_reports__'):
+            # Sorting by financial report field
+            if sort_direction == 'desc':
+                order_by = f'-{order_by}'
+            queryset = queryset.order_by(order_by)
+        elif order_by in ['cedula', 'nombre_completo', 'compania', 'revisar']:
+            # Sorting by person field
+            if sort_direction == 'desc':
+                order_by = f'-{order_by}'
+            queryset = queryset.order_by(order_by)
+    
+    return queryset
+
+def _apply_conflict_filters_and_sorting(queryset, request_params):
+    """
+    Helper function to apply conflict-specific filters and sorting to a queryset.
+    """
+    search_query = request_params.get('q', '')
+    column_filter = request_params.get('column', '')
+    answer_filter = request_params.get('answer', '')
+    value_filter = request_params.get('value', '')
+    compania_filter = request_params.get('compania', '')
+    order_by = request_params.get('order_by', 'nombre_completo')
+    sort_direction = request_params.get('sort_direction', 'asc')
+    
+    # Apply general search filter
+    if search_query:
+        queryset = queryset.filter(
+            Q(nombre_completo__icontains=search_query) |
+            Q(cedula__icontains=search_query) |
+            Q(compania__icontains=search_query))
+    
+    # Apply company filter
+    if compania_filter:
+        queryset = queryset.filter(compania__icontains=compania_filter)
+    
+    # Apply column-based filtering if column is selected
+    if column_filter:
+        # Handle boolean fields (q1-q11)
+        if column_filter in [f'q{i}' for i in range(1, 12)]:
+            if answer_filter == 'yes':
+                queryset = queryset.filter(**{f'conflicts__{column_filter}': True})
+            elif answer_filter == 'no':
+                queryset = queryset.filter(**{f'conflicts__{column_filter}': False})
+        
+        # For other fields (if we add them later)
+        elif value_filter:
+            queryset = queryset.filter(**{f'conflicts__{column_filter}__icontains': value_filter})
+    
+    # Apply sorting
+    if order_by:
+        if order_by.startswith('conflicts__'):
+            # Sorting by conflict field
+            if sort_direction == 'desc':
+                order_by = f'-{order_by}'
+            queryset = queryset.order_by(order_by)
+        elif order_by in ['cedula', 'nombre_completo', 'compania', 'revisar']:
+            # Sorting by person field
+            if sort_direction == 'desc':
+                order_by = f'-{order_by}'
+            queryset = queryset.order_by(order_by)
+    
+    return queryset
+
 def _get_dropdown_values():
     """
     Helper function to get distinct values for dropdown filters
@@ -230,7 +344,7 @@ def _get_dropdown_values():
 
 def main(request):
     persons = Person.objects.all()
-    persons = _apply_filters_and_sorting(persons, request.GET)
+    persons = _apply_person_filters_and_sorting(persons, request.GET)
     
     if 'export' in request.GET:
         model_fields = ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado', 'revisar', 'comments']
@@ -240,7 +354,7 @@ def main(request):
     Main view showing the list of persons with filtering and pagination
     """
     persons = Person.objects.all()
-    persons = _apply_filters_and_sorting(persons, request.GET)
+    persons = _apply_person_filters_and_sorting(persons, request.GET)
     
     # Get dropdown values
     dropdown_values = _get_dropdown_values()
@@ -813,7 +927,7 @@ def import_conflict_excel(request):
 
 def finance_view(request):
     persons = Person.objects.all().prefetch_related('financial_reports')
-    persons = _apply_filters_and_sorting(persons, request.GET)
+    persons = _apply_finance_filters_and_sorting(persons, request.GET)
     
     if 'export' in request.GET:
         model_fields = ['cedula', 'nombre', 'compania', 'ano_declaracion', 'aum_pat_subito', 'activos_var_rel',
@@ -840,14 +954,14 @@ def finance_view(request):
         'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
         **dropdown_values
     }
-    return render(request, 'finance.html', context)
+    return render(request, 'finances.html', context)
 
 def conflicts_view(request):
     persons = Person.objects.all().prefetch_related('conflicts')
-    persons = _apply_filters_and_sorting(persons, request.GET)
+    persons = _apply_conflict_filters_and_sorting(persons, request.GET)
     
     if 'export' in request.GET:
-        model_fields = ['cedula', 'nombre', 'compania', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'comments']
+        model_fields = ['cedula', 'nombre', 'compania', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'Q11', 'comments']
         return export_to_excel(persons, model_fields, 'conflicts_export')
     
     # Get dropdown values
@@ -2672,8 +2786,8 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/conflicts/" class="btn btn-custom-primary">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
     </a>
-    <a href="/admin/" class="btn btn-custom-primary" title="Admin">
-        <i class="fas fa-wrench"></i>
+    <a href="/alerts/" class="btn btn-custom-primary">
+        <i class="fas fa-bell" style="color: red;"></i>
     </a>
     <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
         <i class="fas fa-upload"></i>
@@ -3268,7 +3382,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <tbody>
                             {% for report in financial_reports %}
                             <tr>
-                                <td>{{ report.ano_declaracion }}</td>
+                                <td>{{ report.ano_declaracion|floatformat:"0"|default:"-" }}</td>
                                 <th>Relativa</th>
                                 <td>{{ report.activos_var_rel|default:"-" }}</td>
                                 <td>{{ report.pasivos_var_rel|default:"-" }}</td>
@@ -3357,11 +3471,11 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/conflicts/" class="btn btn-custom-primary">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
     </a>
-    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
-        <i class="fas fa-upload"></i>
-    </a>
     <a href="/alerts/" class="btn btn-custom-primary">
         <i class="fas fa-bell" style="color: red;"></i>
+    </a>
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
+        <i class="fas fa-upload"></i>
     </a>
     <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
         <i class="fas fa-file-excel"></i>
@@ -3375,7 +3489,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="card-body">
         <form method="get" action="." class="row g-3 align-items-center">
             <!-- General Search -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <input type="text" 
                        name="q" 
                        class="form-control form-control-lg" 
@@ -3383,33 +3497,44 @@ document.addEventListener('DOMContentLoaded', function() {
                        value="{{ request.GET.q }}">
             </div>
             
-            <!-- Status Filter -->
-            <div class="col-md-2">
-                <select name="status" class="form-select form-select-lg">
-                    <option value="">Estado</option>
-                    <option value="Activo" {% if request.GET.status == 'Activo' %}selected{% endif %}>Activo</option>
-                    <option value="Retirado" {% if request.GET.status == 'Retirado' %}selected{% endif %}>Retirado</option>
+            <!-- Column Selector -->
+            <div class="col-md-3">
+                <select name="column" class="form-select form-select-lg">
+                    <option value="">Selecciona Columna</option>
+                    <option value="ano_declaracion" {% if request.GET.column == 'ano_declaracion' %}selected{% endif %}>Ano Declaracion</option>
+                    <option value="aum_pat_subito" {% if request.GET.column == 'aum_pat_subito' %}selected{% endif %}>Aum. Pat. Subito</option>
+                    <option value="activos_var_rel" {% if request.GET.column == 'activos_var_rel' %}selected{% endif %}>Activos Var. Rel.</option>
+                    <option value="pasivos_var_rel" {% if request.GET.column == 'pasivos_var_rel' %}selected{% endif %}>Pasivos Var. Rel.</option>
+                    <option value="patrimonio_var_rel" {% if request.GET.column == 'patrimonio_var_rel' %}selected{% endif %}>Patrimonio Var. Rel.</option>
+                    <option value="apalancamiento_var_rel" {% if request.GET.column == 'apalancamiento_var_rel' %}selected{% endif %}>Apalancamiento Var. Rel.</option>
+                    <option value="endeudamiento_var_rel" {% if request.GET.column == 'endeudamiento_var_rel' %}selected{% endif %}>Endeudamiento Var. Rel.</option>
+                    <option value="banco_saldo_var_rel" {% if request.GET.column == 'banco_saldo_var_rel' %}selected{% endif %}>BancoSaldo Var. Rel.</option>
+                    <option value="bienes_var_rel" {% if request.GET.column == 'bienes_var_rel' %}selected{% endif %}>Bienes Var. Rel.</option>
+                    <option value="inversiones_var_rel" {% if request.GET.column == 'inversiones_var_rel' %}selected{% endif %}>Inversiones Var. Rel.</option>
                 </select>
             </div>
             
-            <!-- Cargo Filter -->
+            <!-- Operator Selector -->
             <div class="col-md-2">
-                <select name="cargo" class="form-select form-select-lg">
-                    <option value="">Cargo</option>
-                    {% for cargo in cargos %}
-                        <option value="{{ cargo }}" {% if request.GET.cargo == cargo %}selected{% endif %}>{{ cargo }}</option>
-                    {% endfor %}
+                <select name="operator" class="form-select form-select-lg">
+                    <option value="">Selecciona operador</option>
+                    <option value=">" {% if request.GET.operator == '>' %}selected{% endif %}>Mayor que</option>
+                    <option value="<" {% if request.GET.operator == '<' %}selected{% endif %}>Menor que</option>
+                    <option value="=" {% if request.GET.operator == '=' %}selected{% endif %}>Igual a</option>
+                    <option value=">=" {% if request.GET.operator == '>=' %}selected{% endif %}>Mayor o igual</option>
+                    <option value="<=" {% if request.GET.operator == '<=' %}selected{% endif %}>Menor o igual</option>
+                    <option value="between" {% if request.GET.operator == 'between' %}selected{% endif %}>Entre</option>
+                    <option value="contains" {% if request.GET.operator == 'contains' %}selected{% endif %}>Contiene</option>
                 </select>
             </div>
             
-            <!-- Compania Filter -->
+            <!-- Value Input -->
             <div class="col-md-2">
-                <select name="compania" class="form-select form-select-lg">
-                    <option value="">Compania</option>
-                    {% for compania in companias %}
-                        <option value="{{ compania }}" {% if request.GET.compania == compania %}selected{% endif %}>{{ compania }}</option>
-                    {% endfor %}
-                </select>
+                <input type="text" 
+                       name="value" 
+                       class="form-control form-control-lg" 
+                       placeholder="Valor" 
+                       value="{{ request.GET.value }}">
             </div>
             
             <!-- Submit Buttons -->
@@ -3502,13 +3627,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         {% for report in person.financial_reports.all %}
                         <tr {% if person.revisar %}class="table-warning"{% endif %}>
                             <td>
-                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisión{% else %}No marcado{% endif %}">
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisiÃ³n{% else %}No marcado{% endif %}">
                                     <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}" style="padding-left: 20px;"></i>
                                 </a>
                             </td>
                             <td>{{ person.nombre_completo }}</td>
                             <td>{{ person.compania }}</td>
-                            <td>{{ report.ano_declaracion|default:"-" }}</td>
+                            <td>{{ report.ano_declaracion|floatformat:"0"|default:"-" }}</td>
                             <td>{{ report.aum_pat_subito|default:"-" }}</td>
                             <td>{{ report.activos_var_rel|default:"-" }}</td>
                             <td>{{ report.pasivos_var_rel|default:"-" }}</td>
@@ -3535,7 +3660,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     {% empty %}
                         <tr>
                             <td colspan="14" class="text-center py-4">
-                                {% if request.GET.q or request.GET.status or request.GET.cargo or request.GET.compania %}
+                                {% if request.GET.q or request.GET.column or request.GET.operator or request.GET.value %}
                                     Sin registros que coincidan con los filtros.
                                 {% else %}
                                     Sin registros
@@ -3592,7 +3717,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 {% endblock %}
-"@ | Out-File -FilePath "core/templates/finance.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/finances.html" -Encoding utf8
 
 # Create conflicts template
 @"
@@ -3609,11 +3734,11 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/finance/" class="btn btn-custom-primary">
         <i class="fas fa-chart-line" style="color: green;"></i>
     </a>
-    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
-        <i class="fas fa-upload"></i>
-    </a>
     <a href="/alerts/" class="btn btn-custom-primary">
         <i class="fas fa-bell" style="color: red;"></i>
+    </a>
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
+        <i class="fas fa-upload"></i>
     </a>
     <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
         <i class="fas fa-file-excel"></i>
@@ -3634,26 +3759,7 @@ document.addEventListener('DOMContentLoaded', function() {
                        placeholder="Buscar..." 
                        value="{{ request.GET.q }}">
             </div>
-            
-            <!-- Status Filter -->
-            <div class="col-md-2">
-                <select name="status" class="form-select form-select-lg">
-                    <option value="">Estado</option>
-                    <option value="Activo" {% if request.GET.status == 'Activo' %}selected{% endif %}>Activo</option>
-                    <option value="Retirado" {% if request.GET.status == 'Retirado' %}selected{% endif %}>Retirado</option>
-                </select>
-            </div>
-            
-            <!-- Cargo Filter -->
-            <div class="col-md-2">
-                <select name="cargo" class="form-select form-select-lg">
-                    <option value="">Cargo</option>
-                    {% for cargo in cargos %}
-                        <option value="{{ cargo }}" {% if request.GET.cargo == cargo %}selected{% endif %}>{{ cargo }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            
+
             <!-- Compania Filter -->
             <div class="col-md-2">
                 <select name="compania" class="form-select form-select-lg">
@@ -3661,6 +3767,33 @@ document.addEventListener('DOMContentLoaded', function() {
                     {% for compania in companias %}
                         <option value="{{ compania }}" {% if request.GET.compania == compania %}selected{% endif %}>{{ compania }}</option>
                     {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Column Selector -->
+            <div class="col-md-2">
+                <select name="column" class="form-select form-select-lg">
+                    <option value="">Selecciona Pregunta</option>
+                    <option value="q1" {% if request.GET.column == 'q1' %}selected{% endif %}>Accionista de proveedor</option>
+                    <option value="q2" {% if request.GET.column == 'q2' %}selected{% endif %}>Familiar de accionista/empleado</option>
+                    <option value="q3" {% if request.GET.column == 'q3' %}selected{% endif %}>Accionista del grupo</option>
+                    <option value="q4" {% if request.GET.column == 'q4' %}selected{% endif %}>Actividades extralaborales</option>
+                    <option value="q5" {% if request.GET.column == 'q5' %}selected{% endif %}>Negocios con empleados</option>
+                    <option value="q6" {% if request.GET.column == 'q6' %}selected{% endif %}>Participacion en juntas</option>
+                    <option value="q7" {% if request.GET.column == 'q7' %}selected{% endif %}>Otro conflicto</option>
+                    <option value="q8" {% if request.GET.column == 'q8' %}selected{% endif %}>Conoce codigo de conducta</option>
+                    <option value="q9" {% if request.GET.column == 'q9' %}selected{% endif %}>Veracidad de informacion</option>
+                    <option value="q10" {% if request.GET.column == 'q10' %}selected{% endif %}>Familiar de funcionario</option>
+                    <option value="q11" {% if request.GET.column == 'q11' %}selected{% endif %}>Relacion con sector publico</option>
+                </select>
+            </div>
+            
+            <!-- Answer Selector -->
+            <div class="col-md-2">
+                <select name="answer" class="form-select form-select-lg">
+                    <option value="">Selecciona Respuesta</option>
+                    <option value="yes" {% if request.GET.answer == 'yes' %}selected{% endif %}>Si</option>
+                    <option value="no" {% if request.GET.answer == 'no' %}selected{% endif %}>No</option>
                 </select>
             </div>
             
@@ -3747,7 +3880,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q11&sort_direction={% if current_order == 'conflicts__q11' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Relación con sector publico
+                                RelaciÃ³n con sector publico
                             </a>
                         </th>
                         <th style="color: rgb(0, 0, 0);">Comentarios</th>
@@ -3759,7 +3892,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         {% for conflict in person.conflicts.all %}
                         <tr {% if person.revisar %}class="table-warning"{% endif %}>
                             <td>
-                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisión{% else %}No marcado{% endif %}">
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisiÃ³n{% else %}No marcado{% endif %}">
                                     <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}" style="padding-left: 20px;"></i>
                                 </a>
                             </td>
