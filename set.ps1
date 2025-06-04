@@ -6,7 +6,7 @@ function migratoDjango {
     $YELLOW = [ConsoleColor]::Yellow
     $GREEN = [ConsoleColor]::Green
 
-    Write-Host "🚀 Creating Django Project with Excel Import Functionality" -ForegroundColor $YELLOW
+    Write-Host "🚀 Creating ARPA" -ForegroundColor $YELLOW
 
     # Install required Python packages
     python.exe -m pip install --upgrade pip
@@ -135,6 +135,29 @@ import os
 import sys
 from io import StringIO
 
+def export_to_excel(queryset, model_fields, filename):
+    response = HttpResponse(content_type='application/ms-excel')
+    response['Content-Disposition'] = f'attachment; filename="{filename}.xlsx"'
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Export"
+    
+    # Write headers
+    for col_num, field in enumerate(model_fields, 1):
+        col_letter = get_column_letter(col_num)
+        ws[f'{col_letter}1'] = field
+    
+    # Write data
+    for row_num, obj in enumerate(queryset, 2):
+        for col_num, field in enumerate(model_fields, 1):
+            col_letter = get_column_letter(col_num)
+            value = getattr(obj, field, '')
+            ws[f'{col_letter}{row_num}'] = value
+    
+    wb.save(response)
+    return response
+
 def import_period_excel(request):
     """View for importing period data from Excel files"""
     if request.method == 'POST' and request.FILES.get('period_excel_file'):
@@ -206,6 +229,13 @@ def _get_dropdown_values():
     }
 
 def main(request):
+    persons = Person.objects.all()
+    persons = _apply_filters_and_sorting(persons, request.GET)
+    
+    if 'export' in request.GET:
+        model_fields = ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado', 'revisar', 'comments']
+        return export_to_excel(persons, model_fields, 'persons_export')
+
     """
     Main view showing the list of persons with filtering and pagination
     """
@@ -583,37 +613,6 @@ def process_persons_data(request):
     
     return HttpResponseRedirect('/persons/import/')
 
-def export_to_excel(request):
-    """
-    View for exporting filtered data to Excel
-    """
-    persons = Person.objects.all()
-    persons = _apply_filters_and_sorting(persons, request.GET)
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Personas"
-
-    headers = ["Cedula", "Nombre Completo", "Cargo", "Correo", "Compania", "Estado", "Revisar", "Comentarios"]
-    for col_num, header in enumerate(headers, 1):
-        col_letter = get_column_letter(col_num)
-        ws[f"{col_letter}1"] = header
-        
-    for row_num, person in enumerate(persons, 2):
-        ws[f"A{row_num}"] = person.cedula
-        ws[f"B{row_num}"] = person.nombre_completo
-        ws[f"C{row_num}"] = person.cargo
-        ws[f"D{row_num}"] = person.correo
-        ws[f"E{row_num}"] = person.compania
-        ws[f"F{row_num}"] = person.estado
-        ws[f"G{row_num}"] = "Sí" if person.revisar else "No"
-        ws[f"H{row_num}"] = person.comments or ""
-
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = 'attachment; filename=personas.xlsx'
-    wb.save(response)
-    return response
-
 def import_protected_excel(request):
     """
     View for importing data from password-protected Excel files
@@ -813,9 +812,16 @@ def import_conflict_excel(request):
     return HttpResponseRedirect('/persons/import/')
 
 def finance_view(request):
-    """View showing financial data with filtering and pagination"""
     persons = Person.objects.all().prefetch_related('financial_reports')
     persons = _apply_filters_and_sorting(persons, request.GET)
+    
+    if 'export' in request.GET:
+        model_fields = ['cedula', 'nombre', 'compania', 'ano_declaracion', 'aum_pat_subito', 'activos_var_rel',
+                       'pasivos_var_rel', 'patrimonio_var_rel',
+                       'apalancamiento_var_rel', 'endeudamiento_var_rel',
+                       'banco_saldo_var_rel', 'bienes_var_rel',
+                       'inversiones_var_rel', 'comments']
+        return export_to_excel(persons, model_fields, 'finance_export')
     
     # Get dropdown values
     dropdown_values = _get_dropdown_values()
@@ -837,9 +843,12 @@ def finance_view(request):
     return render(request, 'finance.html', context)
 
 def conflicts_view(request):
-    """View showing conflicts data with filtering and pagination"""
     persons = Person.objects.all().prefetch_related('conflicts')
     persons = _apply_filters_and_sorting(persons, request.GET)
+    
+    if 'export' in request.GET:
+        model_fields = ['cedula', 'nombre', 'compania', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'comments']
+        return export_to_excel(persons, model_fields, 'conflicts_export')
     
     # Get dropdown values
     dropdown_values = _get_dropdown_values()
@@ -872,7 +881,6 @@ urlpatterns = [
     path('persons/import/', views.import_persons, name='import_persons'),
     path('persons/process/', views.process_persons_data, name='process_persons'),
     path('persons/import-protected/', views.import_protected_excel, name='import_protected_excel'),
-    path('persons/export/', views.export_to_excel, name='export_excel'),
     path('persons/import-conflicts/', views.import_conflict_excel, name='import_conflict_excel'),
     path('persons/import-period/', views.import_period_excel, name='import_period_excel'),
     path('finance/', views.finance_view, name='finance_view'),
@@ -2380,9 +2388,6 @@ extract_specific_columns(
                 <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
                     <i class="fas fa-database"></i>
                 </a>
-                <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">  
-                    <i class="fas fa-file-excel"></i>
-                </a>
                 {% endblock %}
             </div>
     </div>
@@ -2651,42 +2656,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 "@ | Out-File -FilePath "core/static/js/loading.js" -Encoding utf8
 
-# Create excelExport.js
-@'
-document.addEventListener("DOMContentLoaded", function() {
-    const exportExcelBtn = document.getElementById("exportExcelBtn");
-    
-    if (exportExcelBtn) {
-        exportExcelBtn.addEventListener("click", function() {
-            // Get all current filter parameters
-            const urlParams = new URLSearchParams(window.location.search);
-            
-            // Construct the export URL with all current filters
-            let exportUrl = '/persons/export/?';
-            
-            // Add all existing query parameters
-            urlParams.forEach((value, key) => {
-                exportUrl += `${key}=${encodeURIComponent(value)}&`;
-            });
-            
-            // Remove trailing '&' if present
-            exportUrl = exportUrl.replace(/&$/, '');
-            
-            // Create a temporary link to trigger the download
-            const link = document.createElement("a");
-            link.href = exportUrl;
-            link.target = "_blank";
-            link.download = "personas_export.xlsx";
-            
-            // Append to body, click and remove
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        });
-    }
-});
-'@ | Out-File -FilePath "core/static/js/excelExport.js" -Encoding utf8
-
 # Create persons template
 @" 
 {% extends "master.html" %}
@@ -2703,18 +2672,14 @@ document.addEventListener("DOMContentLoaded", function() {
     <a href="/conflicts/" class="btn btn-custom-primary">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
     </a>
-    <!--
-    <a href="/admin/" class="btn btn-custom-primary btn-lg text-start" title="Admin Panel">
+    <a href="/admin/" class="btn btn-custom-primary" title="Admin">
         <i class="fas fa-wrench"></i>
-    </a>-->
-    <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
+    </a>
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
         <i class="fas fa-upload"></i>
     </a>
-    <button id="exportExcelBtn" class="btn btn-custom-primary" title="Exportar a Excel">  
-        <i class="fas fa-file-excel" style="color: green;"></i>
-    </button>
-    <a href="/alerts/" class="btn btn-custom-primary">
-        <i class="fas fa-bell" style="color: red;"></i>
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
+        <i class="fas fa-file-excel"></i>
     </a>
 </div>
 {% endblock %}
@@ -2904,13 +2869,9 @@ document.addEventListener("DOMContentLoaded", function() {
     </div>
 </div>
 {% endblock %}
-
-{% block extra_js %}
-<script src="{% static 'js/excelExport.js' %}"></script>
-{% endblock %}
 "@ | Out-File -FilePath "core/templates/persons.html" -Encoding utf8 -Force
 
-#Create import template
+# Create import template
 @"
 {% extends "master.html" %}
 
@@ -2919,6 +2880,15 @@ document.addEventListener("DOMContentLoaded", function() {
 
 {% block navbar_buttons %}
 <div>
+    <a href="/persons/" class="btn btn-custom-primary">
+        <i class="fas fa-users"></i>
+    </a>
+    <a href="/finance/" class="btn btn-custom-primary">
+        <i class="fas fa-chart-line" style="color: green;"></i>
+    </a>
+    <a href="/conflicts/" class="btn btn-custom-primary">
+        <i class="fas fa-balance-scale" style="color: orange;"></i>
+    </a>
     <form method="post" action="{% url 'process_persons' %}" class="d-inline">
             {% csrf_token %}
             <button type="submit" class="btn btn-custom-primary">
@@ -3136,9 +3106,6 @@ document.addEventListener("DOMContentLoaded", function() {
 {% block navbar_buttons %}
 <a href="/admin/core/person/{{ myperson.cedula }}/change/" class="btn btn-outline-dark" title="Admin">
     <i class="fas fa-wrench"></i>
-</a>
-<a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary btn-my-green" title="Exportar a Excel">
-    <i class="fas fa-file-excel"></i>
 </a>
 <a href="/" class="btn btn-custom-primary"><i class="fas fa-arrow-right"></i></a>
 {% endblock %}
@@ -3390,14 +3357,14 @@ document.addEventListener("DOMContentLoaded", function() {
     <a href="/conflicts/" class="btn btn-custom-primary">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
     </a>
-    <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
         <i class="fas fa-upload"></i>
-    </a>
-    <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary" title="Exportar a Excel">  
-        <i class="fas fa-file-excel" style="color: green;"></i>
     </a>
     <a href="/alerts/" class="btn btn-custom-primary">
         <i class="fas fa-bell" style="color: red;"></i>
+    </a>
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
+        <i class="fas fa-file-excel"></i>
     </a>
 </div>
 {% endblock %}
@@ -3642,14 +3609,14 @@ document.addEventListener("DOMContentLoaded", function() {
     <a href="/finance/" class="btn btn-custom-primary">
         <i class="fas fa-chart-line" style="color: green;"></i>
     </a>
-    <a href="/persons/import/" class="btn btn-custom-primary btn-lg text-start" title="Import Data">
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
         <i class="fas fa-upload"></i>
-    </a>
-    <a href="/persons/export/?q={{ myperson.cedula }}" class="btn btn-custom-primary" title="Exportar a Excel">  
-        <i class="fas fa-file-excel" style="color: green;"></i>
     </a>
     <a href="/alerts/" class="btn btn-custom-primary">
         <i class="fas fa-bell" style="color: red;"></i>
+    </a>
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
+        <i class="fas fa-file-excel"></i>
     </a>
 </div>
 {% endblock %}
@@ -3901,7 +3868,7 @@ import os"
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'core/static'),
+    BASE_DIR / "core/static",
 ]
 
 MEDIA_URL = 'media/'
