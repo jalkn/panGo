@@ -3892,7 +3892,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         {% for conflict in person.conflicts.all %}
                         <tr {% if person.revisar %}class="table-warning"{% endif %}>
                             <td>
-                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisiÃ³n{% else %}No marcado{% endif %}">
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisar{% else %}No marcado{% endif %}">
                                     <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}" style="padding-left: 20px;"></i>
                                 </a>
                             </td>
