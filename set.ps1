@@ -132,8 +132,6 @@ from django.db.models import Q
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import os
-import sys
-from io import StringIO
 
 def export_to_excel(queryset, model_fields, filename):
     response = HttpResponse(content_type='application/ms-excel')
@@ -982,6 +980,36 @@ def conflicts_view(request):
         **dropdown_values
     }
     return render(request, 'conflicts.html', context)
+
+def alerts_view(request):
+    """View showing all records marked for review or with comments"""
+    persons = Person.objects.filter(Q(revisar=True) | ~Q(comments='')).distinct()
+    
+    # Apply the same filters as the main view
+    persons = _apply_person_filters_and_sorting(persons, request.GET)
+    
+    if 'export' in request.GET:
+        model_fields = ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado', 'revisar', 'comments']
+        return export_to_excel(persons, model_fields, 'alerts_export')
+
+    # Get dropdown values
+    dropdown_values = _get_dropdown_values()
+    
+    # Pagination
+    paginator = Paginator(persons, 1000)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'persons': page_obj.object_list,
+        'persons_count': persons.count(),
+        'current_order': request.GET.get('order_by', 'nombre_completo').replace('-', ''),
+        'current_direction': request.GET.get('sort_direction', 'asc'),
+        'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
+        **dropdown_values
+    }
+    return render(request, 'alerts.html', context)
 "@
 
     # Create urls.py for core app
@@ -999,7 +1027,9 @@ urlpatterns = [
     path('persons/import-period/', views.import_period_excel, name='import_period_excel'),
     path('finance/', views.finance_view, name='finance_view'),
     path('conflicts/', views.conflicts_view, name='conflicts_view'),
+    path('alerts/', views.alerts_view, name='alerts_view'),
 ]
+
 "@
 
     # Create admin.py with enhanced configuration
@@ -2475,8 +2505,8 @@ extract_specific_columns(
 {% block nav-global %}{% endblock %}
 "@ | Out-File -FilePath "core/templates/admin/base_site.html" -Encoding utf8
 
-    # Create master template
-    @"
+# Create master template
+@"
 <!DOCTYPE html>
 <html>
 <head>
@@ -2486,6 +2516,7 @@ extract_specific_columns(
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     {% load static %}
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/freeze.css' %}">
 </head>
 <body>
     <div class="topnav-container">
@@ -2706,6 +2737,7 @@ body {
 .bg-danger {
     background-color: #dc3545 !important;
 }
+
 "@ | Out-File -FilePath "core/static/css/style.css" -Encoding utf8
 
 @"
@@ -2741,6 +2773,73 @@ body {
     margin-right: 8px;
 }
 "@ | Out-File -FilePath "core/static/css/loading.css" -Encoding utf8
+
+@"
+/* Table container styles */
+.table-container {
+    position: relative;
+    overflow: auto;
+    max-height: calc(100vh - 300px); /* Adjust this value as needed */
+}
+
+.table-fixed-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: white;
+}
+
+.table-fixed-header th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa; /* Match your table header color */
+    z-index: 20;
+}
+
+/* Add a shadow to the fixed header */
+.table-fixed-header::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -5px;
+    height: 5px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.1), transparent);
+}
+
+/* Styles for fixed columns */
+.table-fixed-column {
+    position: sticky;
+    right: 0;
+    background-color: white;
+    z-index: 5;
+}
+
+.table-fixed-column::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -5px;
+    width: 5px;
+    height: 100%;
+    background: linear-gradient(to right, transparent, rgba(0,0,0,0.1));
+}
+
+/* Adjust the z-index for header cells to stay above fixed column */
+.table-fixed-header th:last-child {
+    z-index: 30;
+}
+
+/* Ensure the fixed column stays visible when scrolling */
+.table-container {
+    overflow: auto;
+}
+
+/* Table hover effects */
+.table-hover tbody tr:hover {
+    background-color: rgba(11, 0, 162, 0.05);
+}
+"@ | Out-File -FilePath "core/static/css/freeze.css" -Encoding utf8
 
 # Create loading.js
 @"
@@ -2853,9 +2952,9 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Persons Table -->
 <div class="card border-0 shadow">
     <div class="card-body p-0">
-        <div class="table-responsive">
+        <div class="table-responsive table-container">
             <table class="table table-striped table-hover mb-0">
-                <thead>
+                <thead class="table-fixed-header">
                     <tr>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=revisar&sort_direction={% if current_order == 'revisar' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
@@ -2893,14 +2992,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             </a>
                         </th>
                         <th style="color: rgb(0, 0, 0);">Comentarios</th>
-                        <th style="color: rgb(0, 0, 0);">Ver</th>
+                        <th class="table-fixed-column" style="color: rgb(0, 0, 0);">Ver</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for person in persons %}
                         <tr {% if person.revisar %}class="table-warning"{% endif %}>
                             <td>
-                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisiÃƒÂ³n{% else %}No marcado{% endif %}">
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisar{% else %}No marcado{% endif %}">
                                     <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}" style="padding-left: 20px;"></i>
                                 </a>
                             </td>
@@ -2915,7 +3014,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </span>
                             </td>
                             <td>{{ person.comments|truncatechars:30|default:"" }}</td>
-                            <td>
+                            <td class="table-fixed-column">
                                 <a href="/persons/details/{{ person.cedula }}/" 
                                    class="btn btn-custom-primary btn-sm"
                                    title="View details">
@@ -2984,6 +3083,233 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/persons.html" -Encoding utf8 -Force
+
+# Create alerts template
+@" 
+{% extends "master.html" %}
+
+{% block title %}Alertas{% endblock %}
+{% block navbar_title %}Alertas{% endblock %}
+
+{% block navbar_buttons %}
+<div>
+    <a href="/persons/" class="btn btn-custom-primary">
+        <i class="fas fa-users"></i>
+    </a>
+    <a href="/finance/" class="btn btn-custom-primary">
+        <i class="fas fa-chart-line" style="color: green;"></i>
+    </a>
+    <a href="/conflicts/" class="btn btn-custom-primary">
+        <i class="fas fa-balance-scale" style="color: orange;"></i>
+    </a>
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
+        <i class="fas fa-upload"></i>
+    </a>
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
+        <i class="fas fa-file-excel"></i>
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Search Form -->
+<div class="card mb-4 border-0 shadow" style="background-color:rgb(224, 224, 224);">
+    <div class="card-body">
+        <form method="get" action="." class="row g-3 align-items-center">
+            <!-- General Search -->
+            <div class="col-md-4">
+                <input type="text" 
+                       name="q" 
+                       class="form-control form-control-lg" 
+                       placeholder="Buscar persona..." 
+                       value="{{ request.GET.q }}">
+            </div>
+            
+            <!-- Status Filter -->
+            <div class="col-md-2">
+                <select name="status" class="form-select form-select-lg">
+                    <option value="">Estado</option>
+                    <option value="Activo" {% if request.GET.status == 'Activo' %}selected{% endif %}>Activo</option>
+                    <option value="Retirado" {% if request.GET.status == 'Retirado' %}selected{% endif %}>Retirado</option>
+                </select>
+            </div>
+            
+            <!-- Cargo Filter -->
+            <div class="col-md-2">
+                <select name="cargo" class="form-select form-select-lg">
+                    <option value="">Cargo</option>
+                    {% for cargo in cargos %}
+                        <option value="{{ cargo }}" {% if request.GET.cargo == cargo %}selected{% endif %}>{{ cargo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Compania Filter -->
+            <div class="col-md-2">
+                <select name="compania" class="form-select form-select-lg">
+                    <option value="">Compania</option>
+                    {% for compania in companias %}
+                        <option value="{{ compania }}" {% if request.GET.compania == compania %}selected{% endif %}>{{ compania }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Submit Buttons -->
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-filter"></i></button>
+                <a href="." class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-undo"></i></a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Alerts Table -->
+<div class="card border-0 shadow">
+    <div class="card-body p-0">
+        <div class="table-responsive table-container">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-fixed-header">
+                    <tr>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=revisar&sort_direction={% if current_order == 'revisar' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Revisar
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cedula&sort_direction={% if current_order == 'cedula' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                ID
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=nombre_completo&sort_direction={% if current_order == 'nombre_completo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Nombre
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cargo&sort_direction={% if current_order == 'cargo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cargo
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=correo&sort_direction={% if current_order == 'correo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Correo
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=compania&sort_direction={% if current_order == 'compania' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Compania
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=estado&sort_direction={% if current_order == 'estado' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Estado
+                            </a>
+                        </th>
+                        <th style="color: rgb(0, 0, 0);">Comentarios</th>
+                        <th class="table-fixed-column" style="color: rgb(0, 0, 0);">Ver</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for person in persons %}
+                        {% if person.revisar or person.comments %}
+                        <tr class="{% if person.revisar %}table-warning{% endif %}">
+                            <td>
+                                {% if person.revisar %}
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="Marcado para revisar">
+                                    <i class="fas fa-check-square text-warning" style="padding-left: 20px;"></i>
+                                </a>
+                                {% else %}
+                                <i class="fas fa-square text-secondary" style="padding-left: 20px;"></i>
+                                {% endif %}
+                            </td>
+                            <td>{{ person.cedula }}</td>
+                            <td>{{ person.nombre_completo }}</td>
+                            <td>{{ person.cargo }}</td>
+                            <td>{{ person.correo }}</td>
+                            <td>{{ person.compania }}</td>
+                            <td>
+                                <span class="badge bg-{% if person.estado == 'Activo' %}success{% else %}danger{% endif %}">
+                                    {{ person.estado }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if person.comments %}
+                                    <span class="badge bg-danger">Comentario</span>
+                                    {{ person.comments|truncatechars:30 }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="table-fixed-column">
+                                <a href="/persons/details/{{ person.cedula }}/" 
+                                   class="btn btn-custom-primary btn-sm"
+                                   title="View details">
+                                    <i class="bi bi-person-vcard-fill"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-4">
+                                {% if request.GET.q or request.GET.status or request.GET.cargo or request.GET.compania %}
+                                    Sin registros que coincidan con los filtros.
+                                {% else %}
+                                    No hay alertas (ningún registro marcado para revisar o con comentarios)
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="p-3">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+"@ | Out-File -FilePath "core/templates/alerts.html" -Encoding utf8 -Force
 
 # Create import template
 @"
@@ -3361,9 +3687,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
             <div class="card-body p-0">
-                <div class="table-responsive">
+                <div class="table-responsive table-container">
                     <table class="table table-striped table-hover mb-0">
-                        <thead>
+                        <thead class="table-fixed-header">
                             <tr>
                                 <th>Ano</th>
                                 <th scope="col">Variaciones</th>
@@ -3549,9 +3875,101 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Persons Table -->
 <div class="card border-0 shadow">
     <div class="card-body p-0">
-        <div class="table-responsive">
+        <div class="table-responsive table-container">
             <table class="table table-striped table-hover mb-0">
-                <thead>
+                <thead class="table-fixed-header">
+                    <tr>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: red; color: white;">-50%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: red; color: white;">-50%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th class="table-fixed-column"></th>
+                    </tr>
+                    <tr>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: #228B22; color: white;">-30%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: #228B22; color: white;">-30%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th class="table-fixed-column"></th>
+                    </tr>
+                    <tr>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th >Medio</th>
+                        <th >"<="</th>
+                        <th style="background-color: #228B22; "></th>
+                        <th ></th>
+                        <th style="background-color: #228B22;  color: white;">1.5</th>
+                        <th ></th>
+                        <th style="background-color: #228B22; color: white;">30%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: #228B22; color: white;">30%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th class="table-fixed-column"></th>
+                    </tr>
+                    <tr>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th >Alto</th>
+                        <th >"<"</th>
+                        <th style="background-color: red;"></th>
+                        <th ></th>
+                        <th style="background-color: red; color: white;">2</th>
+                        <th ></th>
+                        <th style="background-color: red; color: white;">50%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: red; color: white;">50%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th class="table-fixed-column"></th>
+                    </tr>
                     <tr>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=revisar&sort_direction={% if current_order == 'revisar' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
@@ -3569,6 +3987,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             </a>
                         </th>
                         <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=cargo&sort_direction={% if current_order == 'cargo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cargo
+                            </a>
+                        </th>
+                        <th style="color: rgb(0, 0, 0);">Comentarios</th>
+                        <th style="color: rgb(0, 0, 0);">Periodo</th>
+                        <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__ano_declaracion&sort_direction={% if current_order == 'financial_reports__ano_declaracion' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
                                 Ano
                             </a>
@@ -3579,18 +4004,38 @@ document.addEventListener('DOMContentLoaded', function() {
                             </a>
                         </th>
                         <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__patrimonio&sort_direction={% if current_order == 'financial_reports__patrimonio' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Patrimonio
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__patrimonio_var_rel&sort_direction={% if current_order == 'financial_reports__patrimonio_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Patrimonio Var. Rel. % 
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__patrimonio_var_abs&sort_direction={% if current_order == 'financial_reports__patrimonio_var_abs' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Patrimonio Var. Abs. $
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__activos&sort_direction={% if current_order == 'financial_reports__activos' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Activos
+                            </a>
+                        </th>
+                        <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__activos_var_rel&sort_direction={% if current_order == 'financial_reports__activos_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Activos Var. Rel.
+                                Activos Var. Rel. %
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__activos_var_abs&sort_direction={% if current_order == 'financial_reports__activos_var_abs' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Activos Var. Abs. $
                             </a>
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__pasivos_var_rel&sort_direction={% if current_order == 'financial_reports__pasivos_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
                                 Pasivos Var. Rel.
-                            </a>
-                        </th>
-                        <th>
-                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__patrimonio_var_rel&sort_direction={% if current_order == 'financial_reports__patrimonio_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Patrimonio Var. Rel.
                             </a>
                         </th>
                         <th>
@@ -3618,8 +4063,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 Inversiones Var. Rel.
                             </a>
                         </th>
-                        <th style="color: rgb(0, 0, 0);">Comentarios</th>
-                        <th style="color: rgb(0, 0, 0);">Ver</th>
+                        
+                        <th class="table-fixed-column" style="color: rgb(0, 0, 0);">Ver</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -3627,24 +4072,30 @@ document.addEventListener('DOMContentLoaded', function() {
                         {% for report in person.financial_reports.all %}
                         <tr {% if person.revisar %}class="table-warning"{% endif %}>
                             <td>
-                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisiÃ³n{% else %}No marcado{% endif %}">
+                                <a href="/admin/core/person/{{ person.cedula }}/change/" style="text-decoration: none;" title="{% if person.revisar %}Marcado para revisar{% else %}No marcado{% endif %}">
                                     <i class="fas fa-{% if person.revisar %}check-square text-warning{% else %}square text-secondary{% endif %}" style="padding-left: 20px;"></i>
                                 </a>
                             </td>
                             <td>{{ person.nombre_completo }}</td>
                             <td>{{ person.compania }}</td>
+                            <td>{{ person.cargo }}</td>
+                            <td>{{ person.comments|truncatechars:30|default:"" }}</td>
+                            <td>{{ report.fkIdPeriodo|floatformat:"0"|default:"-" }}</td>
                             <td>{{ report.ano_declaracion|floatformat:"0"|default:"-" }}</td>
                             <td>{{ report.aum_pat_subito|default:"-" }}</td>
-                            <td>{{ report.activos_var_rel|default:"-" }}</td>
-                            <td>{{ report.pasivos_var_rel|default:"-" }}</td>
+                            <td>{{ report.patrimonio|default:"-" }}</td>
                             <td>{{ report.patrimonio_var_rel|default:"-" }}</td>
+                            <td>{{ report.patrimonio_var_abs|default:"-" }}</td>
+                            <td>{{ report.activos|default:"-" }}</td>
+                            <td>{{ report.activos_var_rel|default:"-" }}</td>
+                            <td>{{ report.activos_var_abs|default:"-" }}</td>
+                            <td>{{ report.pasivos_var_rel|default:"-" }}</td>
                             <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
                             <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
                             <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
                             <td>{{ report.bienes_var_rel|default:"-" }}</td>
                             <td>{{ report.inversiones_var_rel|default:"-" }}</td>
-                            <td>{{ person.comments|truncatechars:30|default:"" }}</td>
-                            <td>
+                            <td class="table-fixed-column">
                                 <a href="/persons/details/{{ person.cedula }}/" 
                                    class="btn btn-custom-primary btn-sm"
                                    title="View details">
@@ -3809,9 +4260,9 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Conflicts Table -->
 <div class="card border-0 shadow">
     <div class="card-body p-0">
-        <div class="table-responsive">
+        <div class="table-responsive table-container">
             <table class="table table-striped table-hover mb-0">
-                <thead>
+                <thead class="table-fixed-header">
                     <tr>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=revisar&sort_direction={% if current_order == 'revisar' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
@@ -3880,11 +4331,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=conflicts__q11&sort_direction={% if current_order == 'conflicts__q11' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                RelaciÃ³n con sector publico
+                                Relacion con sector publico
                             </a>
                         </th>
                         <th style="color: rgb(0, 0, 0);">Comentarios</th>
-                        <th style="color: rgb(0, 0, 0);">Ver</th>
+                        <th class="table-fixed-column" style="color: rgb(0, 0, 0);">Ver</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -3910,7 +4361,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <td class="text-center">{% if conflict.q10 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             <td class="text-center">{% if conflict.q11 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             <td>{{ person.comments|truncatechars:30|default:"" }}</td>
-                            <td>
+                            <td class="table-fixed-column">
                                 <a href="/persons/details/{{ person.cedula }}/" 
                                    class="btn btn-custom-primary btn-sm"
                                    title="View details">
@@ -3999,9 +4450,8 @@ import os"
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
-    BASE_DIR / "core/static",
+    os.path.join(BASE_DIR, 'core/static'),
 ]
 
 MEDIA_URL = 'media/'
@@ -4018,7 +4468,7 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
     python manage.py migrate
 
     # Create superuser
-    #python manage.py createsuperuser
+    python manage.py createsuperuser
 
     python manage.py collectstatic --noinput
 
