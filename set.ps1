@@ -10,7 +10,7 @@ function migratoDjango {
 
     # Install required Python packages
     python.exe -m pip install --upgrade pip
-    python -m pip install django whitenoise django-bootstrap-v5 openpyxl pandas xlrd>=2.0.1
+    python -m pip install django whitenoise django-bootstrap-v5 openpyxl pandas xlrd>=2.0.1 pdfplumber fitz
 
     # Create Django project
     django-admin startproject arpa
@@ -561,7 +561,7 @@ def import_persons(request):
     
     # For GET requests, show the form with analysis results
     analysis_results = get_analysis_results()
-    return render(request, 'import_excel.html', {
+    return render(request, 'import.html', {
         'analysis_results': analysis_results
     })
 
@@ -1010,6 +1010,55 @@ def alerts_view(request):
         **dropdown_values
     }
     return render(request, 'alerts.html', context)
+
+def import_mastercard_pdf(request):
+    """View for importing Mastercard PDF files"""
+    if request.method == 'POST' and request.FILES.get('mastercard_pdf_file'):
+        pdf_file = request.FILES['mastercard_pdf_file']
+        password = request.POST.get('pdf_password', '')
+        
+        try:
+            # Save the uploaded file to core/src/GA consolidado MC/
+            os.makedirs('core/src/GA consolidado MC', exist_ok=True)
+            temp_path = "core/src/GA consolidado MC/mastercard.pdf"
+            with open(temp_path, 'wb+') as destination:
+                for chunk in pdf_file.chunks():
+                    destination.write(chunk)
+            
+            # Store password in a temporary file (or you could pass it directly to the processing function)
+            with open("core/src/GA consolidado MC/password.txt", 'w') as f:
+                f.write(password)
+            
+            messages.success(request, 'Archivo Mastercard PDF importado exitosamente!')
+        except Exception as e:
+            messages.error(request, f'Error guardando archivo Mastercard PDF: {str(e)}')
+        
+    return HttpResponseRedirect('/persons/import/')
+
+def import_visa_pdf(request):
+    """View for importing Visa PDF files"""
+    if request.method == 'POST' and request.FILES.get('visa_pdf_file'):
+        pdf_file = request.FILES['visa_pdf_file']
+        password = request.POST.get('pdf_password', '')
+        
+        try:
+            # Save the uploaded file to core/src/GA consolidado Visa/
+            os.makedirs('core/src/GA consolidado Visa', exist_ok=True)
+            temp_path = "core/src/GA consolidado Visa/visa.pdf"
+            with open(temp_path, 'wb+') as destination:
+                for chunk in pdf_file.chunks():
+                    destination.write(chunk)
+            
+            # Store password in a temporary file
+            with open("core/src/GA consolidado Visa/password.txt", 'w') as f:
+                f.write(password)
+            
+            messages.success(request, 'Archivo Visa PDF importado exitosamente!')
+        except Exception as e:
+            messages.error(request, f'Error guardando archivo Visa PDF: {str(e)}')
+        
+    return HttpResponseRedirect('/persons/import/')
+
 "@
 
     # Create urls.py for core app
@@ -1028,8 +1077,9 @@ urlpatterns = [
     path('finance/', views.finance_view, name='finance_view'),
     path('conflicts/', views.conflicts_view, name='conflicts_view'),
     path('alerts/', views.alerts_view, name='alerts_view'),
+    path('persons/import-mastercard/', views.import_mastercard_pdf, name='import_mastercard_pdf'),
+    path('persons/import-visa/', views.import_visa_pdf, name='import_visa_pdf'),
 ]
-
 "@
 
     # Create admin.py with enhanced configuration
@@ -2492,6 +2542,248 @@ extract_specific_columns(
 )
 "@
 
+# Create core/Mastercard.py
+Set-Content -Path "core/mc.py" -Value @"
+import pdfplumber
+import pandas as pd
+import re
+import os
+from datetime import datetime
+ 
+# Change these lines at the top of the file:
+pdf_folder = "core/src/GA consolidado Visa"
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+os.makedirs("core/src", exist_ok=True)  # Changed to core/src
+output_excel = os.path.join("core/src", f"extractos_resultado_VISA_{timestamp}.xlsx")
+pdf_password = ""
+password_file = os.path.join(pdf_folder, "password.txt")
+if os.path.exists(password_file):
+    with open(password_file, 'r') as f:
+        pdf_password = f.read().strip()
+ 
+# Columnas incluyendo "Página"
+column_names = [
+    "Archivo", "Tarjetahabiente", "Número de Tarjeta", "Número de Autorización",
+    "Fecha de Transacción", "Descripción", "Valor Original",
+    "Tasa Pactada", "Tasa EA Facturada", "Cargos y Abonos",
+    "Saldo a Diferir", "Cuotas", "Página"
+]
+ 
+# Patrón para detectar transacciones
+pattern_transaccion = re.compile(
+    r"(\d{6})\s+(\d{2}/\d{2}/\d{4})\s+(.+?)\s+([\d,.]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,.]+)\s+([\d,.]+)\s+(\d+/\d+|0\.00)"
+)
+ 
+# Patrón para número de tarjeta
+pattern_tarjeta = re.compile(r"TARJETA:\s+\*{12}(\d{4})")
+ 
+data_rows = []
+pdf_files = [f for f in os.listdir(pdf_folder) if f.lower().endswith(".pdf")]
+ 
+for pdf_file in pdf_files:
+    pdf_path = os.path.join(pdf_folder, pdf_file)
+    print(f"📄 Procesando: {pdf_file}")
+ 
+    try:
+        with pdfplumber.open(pdf_path, password=pdf_password) as pdf:
+            tarjetahabiente = ""
+            tarjeta = ""
+            tiene_transacciones = False
+            last_page_number = 1  # predeterminada por si no entra al bucle
+ 
+            for page_number, page in enumerate(pdf.pages, start=1):
+                text = page.extract_text()
+                if not text:
+                    continue
+ 
+                last_page_number = page_number  # actualizar número de página
+                lines = text.split("\n")
+ 
+                for idx, line in enumerate(lines):
+                    line = line.strip()
+ 
+                    # Buscar cambio de tarjeta y nombre
+                    tarjeta_match = pattern_tarjeta.search(line)
+                    if tarjeta_match:
+                        if tarjetahabiente and tarjeta and not tiene_transacciones:
+                            row = [pdf_file, tarjetahabiente, tarjeta, "Sin transacciones", "", "", "", "", "", "", "", "", last_page_number]
+                            data_rows.append(row)
+ 
+                        tarjeta = tarjeta_match.group(1)
+                        tiene_transacciones = False
+ 
+                        # Capturar nombre desde la línea anterior
+                        if idx > 0:
+                            posible_nombre = lines[idx - 1].strip()
+                            posible_nombre = (
+                                posible_nombre
+                                .replace("SEÑOR (A):", "")
+                                .replace("Señor (A):", "")
+                                .replace("SEÑOR:", "")
+                                .replace("Señor:", "")
+                                .strip()
+                                .title()
+                            )
+                            if len(posible_nombre.split()) >= 2:
+                                tarjetahabiente = posible_nombre
+                        continue
+ 
+                    # Buscar transacción
+                    match = pattern_transaccion.search(' '.join(line.split()))
+                    if match and tarjetahabiente and tarjeta:
+                        row_data = list(match.groups())
+                        row_data.insert(0, tarjeta)
+                        row_data.insert(0, tarjetahabiente)
+                        row_data.insert(0, pdf_file)
+ 
+                        # Ajustar valores numéricos
+                        row_data[6] = row_data[6].replace(".", "#").replace(",", ".").replace("#", ",")
+                        row_data[9] = row_data[9].replace(".", "#").replace(",", ".").replace("#", ",")
+                        row_data[10] = row_data[10].replace(".", "#").replace(",", ".").replace("#", ",")
+ 
+                        row_data.append(page_number)  # Añadir número de página
+                        data_rows.append(row_data)
+                        tiene_transacciones = True
+ 
+            # Al final del PDF, si no se registraron transacciones
+            if tarjetahabiente and tarjeta and not tiene_transacciones:
+                row = [pdf_file, tarjetahabiente, tarjeta, "Sin transacciones", "", "", "", "", "", "", "", "", last_page_number]
+                data_rows.append(row)
+ 
+    except Exception as e:
+        print(f"⚠️ Error al procesar '{pdf_file}': {e}")
+ 
+# Exportar a Excel
+if data_rows:
+    df_final = pd.DataFrame(data_rows, columns=column_names)
+    df_final.to_excel(output_excel, index=False)
+    print(f"\n✅ Archivo generado: {output_excel}")
+    print(df_final.head())
+else:
+    print("\n⚠️ No se extrajo ningún dato.")
+"@
+
+# Create core/Visa.py
+Set-Content -Path "core/visa.py" -Value @"
+import pdfplumber
+import pandas as pd
+import re
+import os
+from datetime import datetime
+
+# Change these lines at the top of the file:
+pdf_folder = "core/src/GA consolidado Visa"
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+os.makedirs("core/src", exist_ok=True)  # Changed to core/src
+output_excel = os.path.join("core/src", f"extractos_resultado_VISA_{timestamp}.xlsx")
+pdf_password = ""
+password_file = os.path.join(pdf_folder, "password.txt")
+if os.path.exists(password_file):
+    with open(password_file, 'r') as f:
+        pdf_password = f.read().strip()
+ 
+# Columnas incluyendo "Página"
+column_names = [
+    "Archivo", "Tarjetahabiente", "Número de Tarjeta", "Número de Autorización",
+    "Fecha de Transacción", "Descripción", "Valor Original",
+    "Tasa Pactada", "Tasa EA Facturada", "Cargos y Abonos",
+    "Saldo a Diferir", "Cuotas", "Página"
+]
+ 
+# Patrón para detectar transacciones
+pattern_transaccion = re.compile(
+    r"(\d{6})\s+(\d{2}/\d{2}/\d{4})\s+(.+?)\s+([\d,.]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,.]+)\s+([\d,.]+)\s+(\d+/\d+|0\.00)"
+)
+ 
+# Patrón para número de tarjeta
+pattern_tarjeta = re.compile(r"TARJETA:\s+\*{12}(\d{4})")
+ 
+data_rows = []
+pdf_files = [f for f in os.listdir(pdf_folder) if f.lower().endswith(".pdf")]
+ 
+for pdf_file in pdf_files:
+    pdf_path = os.path.join(pdf_folder, pdf_file)
+    print(f"📄 Procesando: {pdf_file}")
+ 
+    try:
+        with pdfplumber.open(pdf_path, password=pdf_password) as pdf:
+            tarjetahabiente = ""
+            tarjeta = ""
+            tiene_transacciones = False
+            last_page_number = 1  # predeterminada por si no entra al bucle
+ 
+            for page_number, page in enumerate(pdf.pages, start=1):
+                text = page.extract_text()
+                if not text:
+                    continue
+ 
+                last_page_number = page_number  # actualizar número de página
+                lines = text.split("\n")
+ 
+                for idx, line in enumerate(lines):
+                    line = line.strip()
+ 
+                    # Buscar cambio de tarjeta y nombre
+                    tarjeta_match = pattern_tarjeta.search(line)
+                    if tarjeta_match:
+                        if tarjetahabiente and tarjeta and not tiene_transacciones:
+                            row = [pdf_file, tarjetahabiente, tarjeta, "Sin transacciones", "", "", "", "", "", "", "", "", last_page_number]
+                            data_rows.append(row)
+ 
+                        tarjeta = tarjeta_match.group(1)
+                        tiene_transacciones = False
+ 
+                        # Capturar nombre desde la línea anterior
+                        if idx > 0:
+                            posible_nombre = lines[idx - 1].strip()
+                            posible_nombre = (
+                                posible_nombre
+                                .replace("SEÑOR (A):", "")
+                                .replace("Señor (A):", "")
+                                .replace("SEÑOR:", "")
+                                .replace("Señor:", "")
+                                .strip()
+                                .title()
+                            )
+                            if len(posible_nombre.split()) >= 2:
+                                tarjetahabiente = posible_nombre
+                        continue
+ 
+                    # Buscar transacción
+                    match = pattern_transaccion.search(' '.join(line.split()))
+                    if match and tarjetahabiente and tarjeta:
+                        row_data = list(match.groups())
+                        row_data.insert(0, tarjeta)
+                        row_data.insert(0, tarjetahabiente)
+                        row_data.insert(0, pdf_file)
+ 
+                        # Ajustar valores numéricos
+                        row_data[6] = row_data[6].replace(".", "#").replace(",", ".").replace("#", ",")
+                        row_data[9] = row_data[9].replace(".", "#").replace(",", ".").replace("#", ",")
+                        row_data[10] = row_data[10].replace(".", "#").replace(",", ".").replace("#", ",")
+ 
+                        row_data.append(page_number)  # Añadir número de página
+                        data_rows.append(row_data)
+                        tiene_transacciones = True
+ 
+            # Al final del PDF, si no se registraron transacciones
+            if tarjetahabiente and tarjeta and not tiene_transacciones:
+                row = [pdf_file, tarjetahabiente, tarjeta, "Sin transacciones", "", "", "", "", "", "", "", "", last_page_number]
+                data_rows.append(row)
+ 
+    except Exception as e:
+        print(f"⚠️ Error al procesar '{pdf_file}': {e}")
+ 
+# Exportar a Excel
+if data_rows:
+    df_final = pd.DataFrame(data_rows, columns=column_names)
+    df_final.to_excel(output_excel, index=False)
+    print(f"\n✅ Archivo generado: {output_excel}")
+    print(df_final.head())
+else:
+    print("\n⚠️ No se extrajo ningún dato.")
+"@
+
 # Create custom admin base template
 @"
 {% extends "admin/base.html" %}
@@ -2879,19 +3171,44 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block navbar_buttons %}
 <div>
-    <a href="/finance/" class="btn btn-custom-primary">
+    <a href="/finance/" class="btn btn-custom-primary" title="BienesyRentas">
         <i class="fas fa-chart-line" style="color: green;"></i>
     </a>
-    <a href="/conflicts/" class="btn btn-custom-primary">
+    <a href="#" class="btn btn-custom-primary" title="Tarjetas">
+        <i class="far fa-credit-card" style="color: blue;"></i>
+    </a>
+    <a href="/conflicts/" class="btn btn-custom-primary" title="Conflictos">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
     </a>
-    <a href="/alerts/" class="btn btn-custom-primary">
+    <a href="/alerts/" class="btn btn-custom-primary" title="Alertas">
+        {% if alerts_count > 0 %}
+            <span class="badge bg-danger">{{ alerts_count }}</span>
+        {% endif %}
+        {% if alerts_count == 0 %}
+            <span class="badge bg-secondary">0</span>
+        {% endif %}
+        {% if alerts_count > 0 %}
+            <span class="visually-hidden">Alertas</span>
+        {% else %}
+            <span class="visually-hidden">Sin alertas</span>
+        {% endif %}
         <i class="fas fa-bell" style="color: red;"></i>
     </a>
-    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
+        {% if import_count > 0 %}
+            <span class="badge bg-danger">{{ import_count }}</span>
+        {% endif %}
+        {% if import_count == 0 %}
+            <span class="badge bg-secondary">0</span>
+        {% endif %}
+        {% if import_count > 0 %}
+            <span class="visually-hidden">Importaciones pendientes</span>
+        {% else %}
+            <span class="visually-hidden">Sin importaciones pendientes</span>
+        {% endif %}
         <i class="fas fa-upload"></i>
     </a>
-    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Exportar">
         <i class="fas fa-file-excel"></i>
     </a>
 </div>
@@ -3098,6 +3415,9 @@ document.addEventListener('DOMContentLoaded', function() {
     </a>
     <a href="/finance/" class="btn btn-custom-primary">
         <i class="fas fa-chart-line" style="color: green;"></i>
+    </a>
+    <a href="#" class="btn btn-custom-primary" title="Tarjetas">
+        <i class="far fa-credit-card" style="color: blue;"></i>
     </a>
     <a href="/conflicts/" class="btn btn-custom-primary">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
@@ -3469,6 +3789,64 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_mastercard_pdf' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="mastercard_pdf_file" name="mastercard_pdf_file" accept=".pdf" required>
+                        <div class="form-text">Subir archivo PDF de extractos Mastercard</div>
+                        <div class="mb-3">
+                            <input type="password" class="form-control" id="pdf_password" name="pdf_password">
+                            <div class="form-text">Ingrese la contraseña (si aplica)</div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Mastercard</button>
+                </form>
+            </div>
+            {% for message in messages %}
+                {% if 'import_mastercard_pdf' in message.tags %}
+                <div class="card-footer">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" action="{% url 'import_visa_pdf' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="visa_pdf_file" name="visa_pdf_file" accept=".pdf" required>
+                        <div class="form-text">Subir archivo PDF de extractos Visa</div>
+                        <div class="mb-3">
+                            <input type="password" class="form-control" id="pdf_password" name="pdf_password">
+                            <div class="form-text">Ingrese la contraseña (si aplica)</div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Visa</button>
+                </form>
+            </div>
+            {% for message in messages %}
+                {% if 'import_visa_pdf' in message.tags %}
+                <div class="card-footer">
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
     <div class="col-md-8 mb-4">
         <div class="card h-100">
             <div class="card-header bg-light">
@@ -3522,7 +3900,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     {% else %}
                     <div class="text-center py-4">
                         <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No hay resultados de análisis disponibles</p>
+                        <p class="text-muted">No hay resultados de analisis disponibles</p>
                     </div>
                     {% endif %}
                 </div>
@@ -3533,7 +3911,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 {% endblock %}
-"@ | Out-File -FilePath "core/templates/import_excel.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/import.html" -Encoding utf8
 
 # Create details template
 @"
@@ -3794,6 +4172,9 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/persons/" class="btn btn-custom-primary">
         <i class="fas fa-users"></i>
     </a>
+    <a href="#" class="btn btn-custom-primary" title="Tarjetas">
+        <i class="far fa-credit-card" style="color: blue;"></i>
+    </a>
     <a href="/conflicts/" class="btn btn-custom-primary">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
     </a>
@@ -3894,6 +4275,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         <th style="background-color: red; color: white;">-50%</th>
                         <th ></th>
                         <th ></th>
+                        <th style="background-color: red; color: white;">-50%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
                         <th ></th>
                         <th ></th>
                         <th ></th>
@@ -3915,6 +4311,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         <th ></th>
                         <th ></th>
                         <th style="background-color: #228B22; color: white;">-30%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: #228B22; color: white;">-30%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
                         <th ></th>
                         <th ></th>
                         <th ></th>
@@ -3940,6 +4351,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         <th style="background-color: #228B22; color: white;">30%</th>
                         <th ></th>
                         <th ></th>
+                        <th style="background-color: #228B22; color: white;">30%</th>
+                        <th ></th>
+                        <th style="background-color: #228B22; color: white;">4</th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: #228B22; color: white;">>4</th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
                         <th ></th>
                         <th ></th>
                         <th ></th>
@@ -3961,6 +4387,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         <th ></th>
                         <th ></th>
                         <th style="background-color: red; color: white;">50%</th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: red; color: white;">50%</th>
+                        <th ></th>
+                        <th style="background-color: red; color: white;">6</th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th ></th>
+                        <th style="background-color: red; color: white;">>6</th>
+                        <th ></th>
+                        <th ></th>
                         <th ></th>
                         <th ></th>
                         <th ></th>
@@ -4034,36 +4475,110 @@ document.addEventListener('DOMContentLoaded', function() {
                             </a>
                         </th>
                         <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__pasivos&sort_direction={% if current_order == 'financial_reports__pasivos' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Pasivos
+                            </a>
+                        </th>
+                        <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__pasivos_var_rel&sort_direction={% if current_order == 'financial_reports__pasivos_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Pasivos Var. Rel.
+                                Pasivos Var. Rel. 
                             </a>
                         </th>
                         <th>
-                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__apalancamiento_var_rel&sort_direction={% if current_order == 'financial_reports__apalancamiento_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Apalancamiento Var. Rel.
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__pasivos_var_abs&sort_direction={% if current_order == 'financial_reports__pasivos_var_abs' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Pasivos Var. Abs. $
                             </a>
                         </th>
                         <th>
-                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__endeudamiento_var_rel&sort_direction={% if current_order == 'financial_reports__endeudamiento_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Endeudamiento Var. Rel.
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__cant_deudas&sort_direction={% if current_order == 'financial_reports__cant_deudas' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cant. Deudas
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__ingresos&sort_direction={% if current_order == 'financial_reports__ingresos' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Ingresos
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__ingresos_var_rel&sort_direction={% if current_order == 'financial_reports__ingresos_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Ingresos Var. Rel. %
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__ingresos_var_abs&sort_direction={% if current_order == 'financial_reports__ingresos_var_abs' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Ingresos Var. Abs. $
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__cant_ingresos&sort_direction={% if current_order == 'financial_reports__cant_ingresos' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cant. Ingresos
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__banco_saldo&sort_direction={% if current_order == 'financial_reports__banco_saldo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Bancos Saldo
                             </a>
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__banco_saldo_var_rel&sort_direction={% if current_order == 'financial_reports__banco_saldo_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                BancoSaldo Var. Rel.
+                                Bancos Var. %
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__banco_saldo_var_abs&sort_direction={% if current_order == 'financial_reports__banco_saldo_var_abs' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Bancos Var. $
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__cant_cuentas&sort_direction={% if current_order == 'financial_reports__cant_cuentas' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cant. Cuentas
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__cant_bancos&sort_direction={% if current_order == 'financial_reports__cant_bancos' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cant. Bancos
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__bienes_valor&sort_direction={% if current_order == 'financial_reports__bienes_valor' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Bienes Valor
                             </a>
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__bienes_var_rel&sort_direction={% if current_order == 'financial_reports__bienes_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Bienes Var. Rel.
+                                Bienes Var. %
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__bienes_var_abs&sort_direction={% if current_order == 'financial_reports__bienes_var_abs' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Bienes Var. $
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__cant_bienes&sort_direction={% if current_order == 'financial_reports__cant_bienes' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cant. Bienes
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__inversiones_valor&sort_direction={% if current_order == 'financial_reports__inversiones_valor' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Inversiones Valor
                             </a>
                         </th>
                         <th>
                             <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__inversiones_var_rel&sort_direction={% if current_order == 'financial_reports__inversiones_var_rel' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
-                                Inversiones Var. Rel.
+                                Inversiones Var. %
                             </a>
                         </th>
-                        
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__inversiones_var_abs&sort_direction={% if current_order == 'financial_reports__inversiones_var_abs' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Inversiones Var. $
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=financial_reports__cant_inversiones&sort_direction={% if current_order == 'financial_reports__cant_inversiones' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cant. Inversiones
+                            </a>
+                        </th>
                         <th class="table-fixed-column" style="color: rgb(0, 0, 0);">Ver</th>
                     </tr>
                 </thead>
@@ -4089,12 +4604,27 @@ document.addEventListener('DOMContentLoaded', function() {
                             <td>{{ report.activos|default:"-" }}</td>
                             <td>{{ report.activos_var_rel|default:"-" }}</td>
                             <td>{{ report.activos_var_abs|default:"-" }}</td>
+                            <td>{{ report.pasivos|default:"-" }}</td>
                             <td>{{ report.pasivos_var_rel|default:"-" }}</td>
-                            <td>{{ report.apalancamiento_var_rel|default:"-" }}</td>
-                            <td>{{ report.endeudamiento_var_rel|default:"-" }}</td>
+                            <td>{{ report.pasivos_var_abs|default:"-" }}</td>
+                            <td>{{ report.cant_deudas|default:"-" }}</td>
+                            <td>{{ report.ingresos|default:"-" }}</td>
+                            <td>{{ report.ingresos_var_rel|default:"-" }}</td>
+                            <td>{{ report.ingresos_var_abs|default:"-" }}</td>
+                            <td>{{ report.cant_ingresos|default:"-" }}</td>
+                            <td>{{ report.banco_saldo|default:"-" }}</td>
                             <td>{{ report.banco_saldo_var_rel|default:"-" }}</td>
+                            <td>{{ report.banco_saldo_var_abs|default:"-" }}</td>
+                            <td>{{ report.cant_cuentas|default:"-" }}</td>
+                            <td>{{ report.cant_bancos|default:"-" }}</td>
+                            <td>{{ report.bienes|default:"-" }}</td>
                             <td>{{ report.bienes_var_rel|default:"-" }}</td>
+                            <td>{{ report.bienes_var_abs|default:"-" }}</td>
+                            <td>{{ report.cant_bienes|default:"-" }}</td>
+                            <td>{{ report.inversiones|default:"-" }}</td>
                             <td>{{ report.inversiones_var_rel|default:"-" }}</td>
+                            <td>{{ report.inversiones_var_abs|default:"-" }}</td>
+                            <td>{{ report.cant_inversiones|default:"-" }}</td>
                             <td class="table-fixed-column">
                                 <a href="/persons/details/{{ person.cedula }}/" 
                                    class="btn btn-custom-primary btn-sm"
@@ -4184,6 +4714,9 @@ document.addEventListener('DOMContentLoaded', function() {
     </a>
     <a href="/finance/" class="btn btn-custom-primary">
         <i class="fas fa-chart-line" style="color: green;"></i>
+    </a>
+    <a href="#" class="btn btn-custom-primary" title="Tarjetas">
+        <i class="far fa-credit-card" style="color: blue;"></i>
     </a>
     <a href="/alerts/" class="btn btn-custom-primary">
         <i class="fas fa-bell" style="color: red;"></i>
@@ -4450,8 +4983,9 @@ import os"
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'core/static'),
+    BASE_DIR / "core/static",
 ]
 
 MEDIA_URL = 'media/'
@@ -4468,7 +5002,7 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
     python manage.py migrate
 
     # Create superuser
-    python manage.py createsuperuser
+    #python manage.py createsuperuser
 
     python manage.py collectstatic --noinput
 
