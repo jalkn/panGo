@@ -117,6 +117,34 @@ class Conflict(models.Model):
 
     def __str__(self):
         return f"Conflictos de {self.person.nombre_completo}"
+
+class Card(models.Model):
+    CARD_TYPE_CHOICES = [
+        ('MC', 'Mastercard'),
+        ('VI', 'Visa'),
+    ]
+    
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='cards')
+    card_type = models.CharField(max_length=2, choices=CARD_TYPE_CHOICES)
+    card_number = models.CharField(max_length=20)
+    transaction_date = models.DateField()
+    description = models.TextField()
+    original_value = models.DecimalField(max_digits=15, decimal_places=2)
+    exchange_rate = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+    charges = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    balance = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    installments = models.CharField(max_length=20, null=True, blank=True)
+    source_file = models.CharField(max_length=255)
+    page_number = models.IntegerField()
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Tarjeta"
+        verbose_name_plural = "Tarjetas"
+        ordering = ['-transaction_date']
+
+    def __str__(self):
+        return f"{self.get_card_type_display()} - {self.card_number} - {self.transaction_date}"
 "@
 
 # Create views.py with import functionality
@@ -124,7 +152,7 @@ Set-Content -Path "core/views.py" -Value @"
 from django.http import HttpResponse, HttpResponseRedirect
 from django.template import loader
 from django.shortcuts import render
-from .models import Person, FinancialReport, Conflict
+from .models import Person, FinancialReport, Conflict, Card
 import pandas as pd
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -132,6 +160,7 @@ from django.db.models import Q
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import os
+import glob
 
 def export_to_excel(queryset, model_fields, filename):
     response = HttpResponse(content_type='application/ms-excel')
@@ -901,7 +930,7 @@ def import_conflict_excel(request):
                 "ID", "Cedula", "Nombre", "1er Nombre", "1er Apellido", 
                 "2do Apellido", "Compañía", "Cargo", "Email", "Fecha de Inicio", 
                 "Q1", "Q2", "Q3", "Q4", "Q5",
-                "Q6", "Q7", "Q8", "Q9", "Q10"
+                "Q6", "Q7", "Q8", "Q9", "Q10", "Q11"
             ]
             
             extract_specific_columns(
@@ -1025,13 +1054,22 @@ def import_mastercard_pdf(request):
                 for chunk in pdf_file.chunks():
                     destination.write(chunk)
             
-            # Store password in a temporary file (or you could pass it directly to the processing function)
+            # Store password in a temporary file
             with open("core/src/GA consolidado MC/password.txt", 'w') as f:
                 f.write(password)
             
-            messages.success(request, 'Archivo Mastercard PDF importado exitosamente!')
+            # Process the PDF using mc.py
+            from core.mc import main as process_mc_pdf
+            process_mc_pdf()  # This creates the Excel file
+            
+            # Now process the Excel data into Card model
+            excel_path = "core/src/extractos_resultado_MC_*.xlsx"
+            latest_file = max(glob.glob(excel_path), key=os.path.getctime)
+            process_card_data(latest_file, 'MC')
+            
+            messages.success(request, 'Archivo Mastercard importado y procesado exitosamente!')
         except Exception as e:
-            messages.error(request, f'Error guardando archivo Mastercard PDF: {str(e)}')
+            messages.error(request, f'Error guardando o procesando archivo Mastercard: {str(e)}')
         
     return HttpResponseRedirect('/persons/import/')
 
@@ -1053,12 +1091,125 @@ def import_visa_pdf(request):
             with open("core/src/GA consolidado Visa/password.txt", 'w') as f:
                 f.write(password)
             
-            messages.success(request, 'Archivo Visa PDF importado exitosamente!')
+            # Process the PDF using visa.py
+            from core.visa import main as process_visa_pdf
+            process_visa_pdf()  # This creates the Excel file
+            
+            # Now process the Excel data into Card model
+            excel_path = "core/src/extractos_resultado_VISA_*.xlsx"
+            latest_file = max(glob.glob(excel_path), key=os.path.getctime)
+            process_card_data(latest_file, 'VI')
+            
+            messages.success(request, 'Archivo Visa importado y procesado exitosamente!')
         except Exception as e:
-            messages.error(request, f'Error guardando archivo Visa PDF: {str(e)}')
+            messages.error(request, f'Error guardando o procesando archivo Visa: {str(e)}')
         
     return HttpResponseRedirect('/persons/import/')
 
+def cards_view(request):
+    """View showing all card transactions"""
+    # Get all cards with related person data
+    cards = Card.objects.all().select_related('person')
+    
+    # Apply filters
+    search_query = request.GET.get('q', '')
+    card_type_filter = request.GET.get('card_type', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    order_by = request.GET.get('order_by', '-transaction_date')
+    
+    if search_query:
+        cards = cards.filter(
+            Q(person__nombre_completo__icontains=search_query) |
+            Q(person__cedula__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(card_number__icontains=search_query)
+        )
+    
+    if card_type_filter:
+        cards = cards.filter(card_type=card_type_filter)
+    
+    if date_from:
+        cards = cards.filter(transaction_date__gte=date_from)
+    
+    if date_to:
+        cards = cards.filter(transaction_date__lte=date_to)
+    
+    # Apply sorting
+    cards = cards.order_by(order_by)
+    
+    # Split into MC and Visa
+    mc_cards = cards.filter(card_type='MC')
+    visa_cards = cards.filter(card_type='VI')
+    
+    if 'export' in request.GET:
+        model_fields = [
+            'person__cedula', 'person__nombre_completo', 'card_type', 
+            'card_number', 'transaction_date', 'description',
+            'original_value', 'exchange_rate', 'charges', 'balance',
+            'installments', 'source_file'
+        ]
+        return export_to_excel(cards, model_fields, 'cards_export')
+    
+    # Pagination
+    mc_paginator = Paginator(mc_cards, 50)
+    mc_page_number = request.GET.get('mc_page')
+    mc_page_obj = mc_paginator.get_page(mc_page_number)
+    
+    visa_paginator = Paginator(visa_cards, 50)
+    visa_page_number = request.GET.get('visa_page')
+    visa_page_obj = visa_paginator.get_page(visa_page_number)
+    
+    context = {
+        'mc_page_obj': mc_page_obj,
+        'visa_page_obj': visa_page_obj,
+        'current_order': order_by.replace('-', ''),
+        'current_direction': 'desc' if order_by.startswith('-') else 'asc',
+        'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
+    }
+    return render(request, 'cards.html', context)
+
+def process_card_data(file_path, card_type):
+    """Process card data from Excel and update Card model"""
+    try:
+        df = pd.read_excel(file_path)
+        
+        for _, row in df.iterrows():
+            try:
+                # Find person by name (since we might not have cedula in card data)
+                person = Person.objects.filter(
+                    nombre_completo__iexact=row['Tarjetahabiente']
+                ).first()
+                
+                if not person:
+                    print(f"Person not found: {row['Tarjetahabiente']}")
+                    continue
+                    
+                # Create or update card record
+                Card.objects.update_or_create(
+                    person=person,
+                    card_type=card_type,
+                    card_number=row['Número de Tarjeta'],
+                    transaction_date=row['Fecha de Transacción'],
+                    defaults={
+                        'description': row['Descripción'],
+                        'original_value': row['Valor Original'],
+                        'exchange_rate': row.get('Tasa Pactada'),
+                        'charges': row.get('Cargos y Abonos'),
+                        'balance': row.get('Saldo a Diferir'),
+                        'installments': row.get('Cuotas'),
+                        'source_file': row['Archivo'],
+                        'page_number': row.get('Página', 1),
+                    }
+                )
+            except Exception as e:
+                print(f"Error processing row: {e}")
+                continue
+                
+        return True
+    except Exception as e:
+        print(f"Error processing card data: {e}")
+        return False
 "@
 
     # Create urls.py for core app
@@ -1079,13 +1230,14 @@ urlpatterns = [
     path('alerts/', views.alerts_view, name='alerts_view'),
     path('persons/import-mastercard/', views.import_mastercard_pdf, name='import_mastercard_pdf'),
     path('persons/import-visa/', views.import_visa_pdf, name='import_visa_pdf'),
+    path('cards/', views.cards_view, name='cards_view'),
 ]
 "@
 
     # Create admin.py with enhanced configuration
 Set-Content -Path "core/admin.py" -Value @" 
 from django.contrib import admin
-from .models import Person, FinancialReport, Conflict
+from .models import Person, FinancialReport, Conflict, Card
 
 def make_active(modeladmin, request, queryset):
     queryset.update(estado='Activo')
@@ -1164,9 +1316,17 @@ class ConflictAdmin(admin.ModelAdmin):
     raw_id_fields = ('person',)
     list_per_page = 25
 
+class CardAdmin(admin.ModelAdmin):
+    list_display = ('person', 'get_card_type_display', 'transaction_date', 'description', 'original_value')
+    list_filter = ('card_type', 'transaction_date')
+    search_fields = ('person__nombre_completo', 'person__cedula', 'description')
+    date_hierarchy = 'transaction_date'
+    list_per_page = 50
+
 admin.site.register(Person, PersonAdmin)
 admin.site.register(FinancialReport, FinancialReportAdmin)
 admin.site.register(Conflict, ConflictAdmin)
+admin.site.register(Card, CardAdmin)
 "@
 
 # Update project urls.py with proper admin configuration
@@ -2420,7 +2580,7 @@ def merge_conflicts_data(idtrends_file, conflicts_file, output_file):
             'BancoSaldo', 'Bienes', 'Inversiones', 'BancoSaldo Var. Abs.', 'BancoSaldo Var. Rel.',
             'Bienes Var. Abs.', 'Bienes Var. Rel.', 'Inversiones Var. Abs.', 'Inversiones Var. Rel.',
             'Ingresos', 'Cant_Ingresos', 'Ingresos Var. Abs.', 'Ingresos Var. Rel.',
-            'Capital', 'Fecha de Inicio', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10'
+            'Capital', 'Fecha de Inicio', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'Q11'
         ]
 
         # Ensure we only keep columns that exist in our merged dataframe
@@ -2462,7 +2622,7 @@ def extract_specific_columns(input_file, output_file, custom_headers=None):
         
         # Column selection (first 11 + specified extras)
         base_cols = list(range(11))  # Columns 0-10 (A-K)
-        extra_cols = [12,14,16,18,20,22,24,26,28]
+        extra_cols = [12,14,16,18,20,22,24,25,26,28]
         selected_cols = [col for col in base_cols + extra_cols if col < df.shape[1]]
         
         # Extract data with headers
@@ -2532,7 +2692,7 @@ custom_headers = [
     "ID", "Cedula", "Nombre", "1er Nombre", "1er Apellido", 
     "2do Apellido", "Compañía", "Cargo", "Email", "Fecha de Inicio", 
     "Q1", "Q2", "Q3", "Q4", "Q5",
-    "Q6", "Q7", "Q8", "Q9", "Q10"
+    "Q6", "Q7", "Q8", "Q9", "Q10", "Q11"
 ]
 
 extract_specific_columns(
@@ -3174,7 +3334,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/finance/" class="btn btn-custom-primary" title="BienesyRentas">
         <i class="fas fa-chart-line" style="color: green;"></i>
     </a>
-    <a href="#" class="btn btn-custom-primary" title="Tarjetas">
+    <a href="/cards/" class="btn btn-custom-primary" title="Tarjetas">
         <i class="far fa-credit-card" style="color: blue;"></i>
     </a>
     <a href="/conflicts/" class="btn btn-custom-primary" title="Conflictos">
@@ -3416,16 +3576,16 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/finance/" class="btn btn-custom-primary">
         <i class="fas fa-chart-line" style="color: green;"></i>
     </a>
-    <a href="#" class="btn btn-custom-primary" title="Tarjetas">
+    <a href="/cards/" class="btn btn-custom-primary" title="Tarjetas">
         <i class="far fa-credit-card" style="color: blue;"></i>
     </a>
     <a href="/conflicts/" class="btn btn-custom-primary">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
     </a>
-    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
         <i class="fas fa-upload"></i>
     </a>
-    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Exportar">
         <i class="fas fa-file-excel"></i>
     </a>
 </div>
@@ -3646,6 +3806,10 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/finance/" class="btn btn-custom-primary">
         <i class="fas fa-chart-line" style="color: green;"></i>
     </a>
+    </a>
+        <a href="/cards/" class="btn btn-custom-primary" title="Tarjetas">
+        <i class="far fa-credit-card" style="color: blue;"></i>
+    </a>
     <a href="/conflicts/" class="btn btn-custom-primary">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
     </a>
@@ -3739,7 +3903,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="conflict_excel_file" name="conflict_excel_file" required>
-                        <div class="form-text">'ID', 'Cedula', 'Nombre', 'Compania', 'Cargo', 'Email', 'Fecha de Inicio', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10'</div>
+                        <div class="form-text">'ID', 'Cedula', 'Nombre', 'Compania', 'Cargo', 'Email', 'Fecha de Inicio', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'Q11'</div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Conflictos</button>
                 </form>
@@ -3796,10 +3960,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="mastercard_pdf_file" name="mastercard_pdf_file" accept=".pdf" required>
-                        <div class="form-text">Subir archivo PDF de extractos Mastercard</div>
+                        <div class="form-text">Subir archivos PDF de extractos Mastercard</div>
                         <div class="mb-3">
                             <input type="password" class="form-control" id="pdf_password" name="pdf_password">
-                            <div class="form-text">Ingrese la contraseña (si aplica)</div>
+                            <div class="form-text">Ingrese la contrasena</div>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Mastercard</button>
@@ -3825,10 +3989,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="visa_pdf_file" name="visa_pdf_file" accept=".pdf" required>
-                        <div class="form-text">Subir archivo PDF de extractos Visa</div>
+                        <div class="form-text">Subir archivos PDF de extractos Visa</div>
                         <div class="mb-3">
                             <input type="password" class="form-control" id="pdf_password" name="pdf_password">
-                            <div class="form-text">Ingrese la contraseña (si aplica)</div>
+                            <div class="form-text">Ingrese la contrasena</div>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Visa</button>
@@ -4172,7 +4336,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/persons/" class="btn btn-custom-primary">
         <i class="fas fa-users"></i>
     </a>
-    <a href="#" class="btn btn-custom-primary" title="Tarjetas">
+    <a href="/cards/" class="btn btn-custom-primary" title="Tarjetas">
         <i class="far fa-credit-card" style="color: blue;"></i>
     </a>
     <a href="/conflicts/" class="btn btn-custom-primary">
@@ -4181,10 +4345,10 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/alerts/" class="btn btn-custom-primary">
         <i class="fas fa-bell" style="color: red;"></i>
     </a>
-    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
         <i class="fas fa-upload"></i>
     </a>
-    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Exportar">
         <i class="fas fa-file-excel"></i>
     </a>
 </div>
@@ -4715,16 +4879,16 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/finance/" class="btn btn-custom-primary">
         <i class="fas fa-chart-line" style="color: green;"></i>
     </a>
-    <a href="#" class="btn btn-custom-primary" title="Tarjetas">
+    <a href="/cards/" class="btn btn-custom-primary" title="Tarjetas">
         <i class="far fa-credit-card" style="color: blue;"></i>
     </a>
     <a href="/alerts/" class="btn btn-custom-primary">
         <i class="fas fa-bell" style="color: red;"></i>
     </a>
-    <a href="/persons/import/" class="btn btn-custom-primary" title="Import Data">
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
         <i class="fas fa-upload"></i>
     </a>
-    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Export to Excel">
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Exportar">
         <i class="fas fa-file-excel"></i>
     </a>
 </div>
@@ -4968,6 +5132,396 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/conflicts.html" -Encoding utf8
+
+# Create tarjetas template
+@"
+{% extends "master.html" %}
+
+{% block title %}Tarjetas{% endblock %}
+{% block navbar_title %}Tarjetas{% endblock %}
+
+{% block navbar_buttons %}
+<div>
+    <a href="/persons/" class="btn btn-custom-primary">
+        <i class="fas fa-users"></i>
+    </a>
+    <a href="/finance/" class="btn btn-custom-primary">
+        <i class="fas fa-chart-line" style="color: green;"></i>
+    </a>
+    <a href="/conflicts/" class="btn btn-custom-primary">
+        <i class="fas fa-balance-scale" style="color: orange;"></i>
+    </a>
+    <a href="/alerts/" class="btn btn-custom-primary">
+        <i class="fas fa-bell" style="color: red;"></i>
+    </a>
+    <a href="/persons/import/" class="btn btn-custom-primary">
+        <i class="fas fa-upload"></i>
+    </a>
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green">
+        <i class="fas fa-file-excel"></i>
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Search Form -->
+<div class="card mb-4 border-0 shadow" style="background-color:rgb(224, 224, 224);">
+    <div class="card-body">
+        <form method="get" action="." class="row g-3 align-items-center">
+            <!-- General Search -->
+            <div class="col-md-4">
+                <input type="text" 
+                       name="q" 
+                       class="form-control form-control-lg" 
+                       placeholder="Buscar transacciones..." 
+                       value="{{ request.GET.q }}">
+            </div>
+            
+            <!-- Card Type Filter -->
+            <div class="col-md-2">
+                <select name="card_type" class="form-select form-select-lg">
+                    <option value="">Todas</option>
+                    <option value="MC" {% if request.GET.card_type == 'MC' %}selected{% endif %}>Mastercard</option>
+                    <option value="VI" {% if request.GET.card_type == 'VI' %}selected{% endif %}>Visa</option>
+                </select>
+            </div>
+            
+            <!-- Date Range -->
+            <div class="col-md-3">
+                <input type="date" name="date_from" class="form-control form-control-lg" 
+                       value="{{ request.GET.date_from }}" placeholder="Desde">
+            </div>
+            <div class="col-md-3">
+                <input type="date" name="date_to" class="form-control form-control-lg" 
+                       value="{{ request.GET.date_to }}" placeholder="Hasta">
+            </div>
+            
+            <!-- Submit Buttons -->
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-custom-primary btn-lg flex-grow-1">
+                    <i class="fas fa-filter"></i>
+                </button>
+                <a href="." class="btn btn-custom-primary btn-lg flex-grow-1">
+                    <i class="fas fa-undo"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Mastercard Table -->
+<div class="card mb-4 border-0 shadow">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Mastercard</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive table-container">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-fixed-header">
+                    <tr>
+                        <th>Tarjetahabiente</th>
+                        <th>Numero</th>
+                        <th>Fecha</th>
+                        <th>Descripcion</th>
+                        <th>Valor</th>
+                        <th>Archivo</th>
+                        <th class="table-fixed-column">Ver</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for card in mc_page_obj %}
+                    <tr>
+                        <td>
+                            <a href="/persons/details/{{ card.person.cedula }}/">
+                                {{ card.person.nombre_completo }}
+                            </a>
+                        </td>
+                        <td>**** **** **** {{ card.card_number|slice:"-4:" }}</td>
+                        <td>{{ card.transaction_date|date:"Y-m-d" }}</td>
+                        <td>{{ card.description|truncatechars:50 }}</td>
+                        <td>`$`{{ card.original_value|floatformat:2 }}</td>
+                        <td>{{ card.source_file|truncatechars:20 }}</td>
+                        <td class="table-fixed-column">
+                            <a href="#" class="btn btn-custom-primary btn-sm" 
+                               data-bs-toggle="modal" data-bs-target="#cardModal{{ card.id }}">
+                                <i class="bi bi-eye-fill"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            No hay transacciones de Mastercard
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if mc_page_obj.has_other_pages %}
+        <div class="p-3">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if mc_page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?mc_page=1{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?mc_page={{ mc_page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in mc_page_obj.paginator.page_range %}
+                        {% if mc_page_obj.number == num %}
+                            <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
+                        {% elif num > mc_page_obj.number|add:'-3' and num < mc_page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?mc_page={{ num }}{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if mc_page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?mc_page={{ mc_page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?mc_page={{ mc_page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Visa Table -->
+<div class="card border-0 shadow">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">Visa</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive table-container">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-fixed-header">
+                    <tr>
+                        <th>Tarjetahabiente</th>
+                        <th>Numero</th>
+                        <th>Fecha</th>
+                        <th>Descripcion</th>
+                        <th>Valor</th>
+                        <th>Archivo</th>
+                        <th class="table-fixed-column">Ver</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for card in visa_page_obj %}
+                    <tr>
+                        <td>
+                            <a href="/persons/details/{{ card.person.cedula }}/">
+                                {{ card.person.nombre_completo }}
+                            </a>
+                        </td>
+                        <td>**** **** **** {{ card.card_number|slice:"-4:" }}</td>
+                        <td>{{ card.transaction_date|date:"Y-m-d" }}</td>
+                        <td>{{ card.description|truncatechars:50 }}</td>
+                        <td>`$`{{ card.original_value|floatformat:2 }}</td>
+                        <td>{{ card.source_file|truncatechars:20 }}</td>
+                        <td class="table-fixed-column">
+                            <a href="#" class="btn btn-custom-primary btn-sm" 
+                               data-bs-toggle="modal" data-bs-target="#cardModal{{ card.id }}">
+                                <i class="bi bi-eye-fill"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            No hay transacciones de Visa
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if visa_page_obj.has_other_pages %}
+        <div class="p-3">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if visa_page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?visa_page=1{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                                <span aria-hidden="true">&laquo;&laquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?visa_page={{ visa_page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in visa_page_obj.paginator.page_range %}
+                        {% if visa_page_obj.number == num %}
+                            <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
+                        {% elif num > visa_page_obj.number|add:'-3' and num < visa_page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?visa_page={{ num }}{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if visa_page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?visa_page={{ visa_page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?visa_page={{ visa_page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                                <span aria-hidden="true">&raquo;&raquo;</span>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Card Detail Modals -->
+{% for card in mc_page_obj %}
+<div class="modal fade" id="cardModal{{ card.id }}" tabindex="-1" aria-labelledby="cardModalLabel{{ card.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cardModalLabel{{ card.id }}">
+                    Detalles de Transacción
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Tarjetahabiente:</strong>
+                        <p>{{ card.person.nombre_completo }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Numero de Tarjeta:</strong>
+                        <p>**** **** **** {{ card.card_number|slice:"-4:" }}</p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Fecha:</strong>
+                        <p>{{ card.transaction_date|date:"Y-m-d" }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Valor:</strong>
+                        <p>`$`{{ card.original_value|floatformat:2 }}</p>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <strong>Descripcion:</strong>
+                    <p>{{ card.description }}</p>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Archivo:</strong>
+                        <p>{{ card.source_file }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Página:</strong>
+                        <p>{{ card.page_number }}</p>
+                    </div>
+                </div>
+                {% if card.installments %}
+                <div class="mb-3">
+                    <strong>Cuotas:</strong>
+                    <p>{{ card.installments }}</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% for card in visa_page_obj %}
+<div class="modal fade" id="cardModal{{ card.id }}" tabindex="-1" aria-labelledby="cardModalLabel{{ card.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cardModalLabel{{ card.id }}">
+                    Detalles de Transacción
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Tarjetahabiente:</strong>
+                        <p>{{ card.person.nombre_completo }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Numero de Tarjeta:</strong>
+                        <p>**** **** **** {{ card.card_number|slice:"-4:" }}</p>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Fecha:</strong>
+                        <p>{{ card.transaction_date|date:"Y-m-d" }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Valor:</strong>
+                        <p>`$`{{ card.original_value|floatformat:2 }}</p>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <strong>Descripcion:</strong>
+                    <p>{{ card.description }}</p>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Archivo:</strong>
+                        <p>{{ card.source_file }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Página:</strong>
+                        <p>{{ card.page_number }}</p>
+                    </div>
+                </div>
+                {% if card.installments %}
+                <div class="mb-3">
+                    <strong>Cuotas:</strong>
+                    <p>{{ card.installments }}</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+"@ | Out-File -FilePath "core/templates/cards.html" -Encoding utf8
+
 
     # Update settings.py
     $settingsContent = Get-Content -Path ".\arpa\settings.py" -Raw
