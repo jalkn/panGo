@@ -3846,6 +3846,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'js/loading.js' %}"></script>
 
 <div class="row">
+    <!-- First row with 3 cards -->
     <div class="col-md-4 mb-4">
         <div class="card h-100">
             <div class="card-body">
@@ -3903,7 +3904,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     {% csrf_token %}
                     <div class="mb-3">
                         <input type="file" class="form-control" id="conflict_excel_file" name="conflict_excel_file" required>
-                        <div class="form-text">'ID', 'Cedula', 'Nombre', 'Compania', 'Cargo', 'Email', 'Fecha de Inicio', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'Q11'</div>
+                        <div class="form-text">'ID', 'Cedula', 'Nombre', 'Compania', 'Cargo', 'Email', 'Fecha de Inicio', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'Q11' </div>
                     </div>
                     <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Conflictos</button>
                 </form>
@@ -3923,25 +3924,62 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <div class="row">
-    <div class="col-md-4 mb-4">
+    <!-- Left column with 3 import forms in a single card -->
+    <div class="col-md-4">
         <div class="card h-100">
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'import_protected_excel' %}">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <input type="file" class="form-control" id="protected_excel_file" name="protected_excel_file" required>
-                        <div class="form-text">El archivo Excel de Bienes y Rentas debe incluir las columnas: </div>
+            <div class="card-body d-flex flex-column">
+                <!-- Bienes y Rentas -->
+                <div class="mb-4 flex-grow-1">
+                    <form method="post" enctype="multipart/form-data" action="{% url 'import_protected_excel' %}">
+                        {% csrf_token %}
                         <div class="mb-3">
-                            <input type="password" class="form-control" id="excel_password" name="excel_password">
-                            <div class="form-text">Ingrese la contrasena</div>
+                            <input type="file" class="form-control" id="protected_excel_file" name="protected_excel_file" required>
+                            <div class="form-text">El archivo Excel de Bienes y Rentas debe incluir las columnas: </div>
+                            <div class="mb-3">
+                                <input type="password" class="form-control" id="excel_password" name="excel_password">
+                                <div class="form-text">Ingrese la contrasena</div>
+                            </div>
                         </div>
-                    </div>
-                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
-                </form>
-            </div>
+                        <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Bienes y Rentas</button>
+                    </form>
+                </div>
 
+                <!-- Mastercard -->
+                <div class="mb-4 flex-grow-1">
+                    <form method="post" enctype="multipart/form-data" action="{% url 'import_mastercard_pdf' %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <input type="file" class="form-control" id="mastercard_pdf_file" name="mastercard_pdf_file" accept=".pdf" required>
+                            <div class="form-text">Subir archivos PDF de extractos Mastercard</div>
+                            <div class="mb-3">
+                                <input type="password" class="form-control" id="pdf_password" name="pdf_password">
+                                <div class="form-text">Ingrese la contrasena</div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Mastercard</button>
+                    </form>
+                </div>
+
+                <!-- Visa -->
+                <div class="flex-grow-1">
+                    <form method="post" enctype="multipart/form-data" action="{% url 'import_visa_pdf' %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <input type="file" class="form-control" id="visa_pdf_file" name="visa_pdf_file" accept=".pdf" required>
+                            <div class="form-text">Subir archivos PDF de extractos Visa</div>
+                            <div class="mb-3">
+                                <input type="password" class="form-control" id="pdf_password" name="pdf_password">
+                                <div class="form-text">Ingrese la contrasena</div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Visa</button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Messages for all three forms -->
             {% for message in messages %}
-                {% if 'import_protected_excel' in message.tags %}
+                {% if 'import_protected_excel' in message.tags or 'import_mastercard_pdf' in message.tags or 'import_visa_pdf' in message.tags %}
                 <div class="card-footer">
                     <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
                         {{ message }}
@@ -3953,121 +3991,64 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 
-    <div class="col-md-4 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'import_mastercard_pdf' %}">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <input type="file" class="form-control" id="mastercard_pdf_file" name="mastercard_pdf_file" accept=".pdf" required>
-                        <div class="form-text">Subir archivos PDF de extractos Mastercard</div>
-                        <div class="mb-3">
-                            <input type="password" class="form-control" id="pdf_password" name="pdf_password">
-                            <div class="form-text">Ingrese la contrasena</div>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Mastercard</button>
-                </form>
-            </div>
-            {% for message in messages %}
-                {% if 'import_mastercard_pdf' in message.tags %}
-                <div class="card-footer">
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                </div>
-                {% endif %}
-            {% endfor %}
-        </div>
-    </div>
-
-    <div class="col-md-4 mb-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data" action="{% url 'import_visa_pdf' %}">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <input type="file" class="form-control" id="visa_pdf_file" name="visa_pdf_file" accept=".pdf" required>
-                        <div class="form-text">Subir archivos PDF de extractos Visa</div>
-                        <div class="mb-3">
-                            <input type="password" class="form-control" id="pdf_password" name="pdf_password">
-                            <div class="form-text">Ingrese la contrasena</div>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Visa</button>
-                </form>
-            </div>
-            {% for message in messages %}
-                {% if 'import_visa_pdf' in message.tags %}
-                <div class="card-footer">
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                </div>
-                {% endif %}
-            {% endfor %}
-        </div>
-    </div>
-
-    <div class="col-md-8 mb-4">
+    <!-- Right column with analysis results -->
+    <div class="col-md-8">
         <div class="card h-100">
             <div class="card-header bg-light">
                 <h5 class="mb-0">Resultados del Analisis</h5>
             </div>
-                <div class="card-body">
-                    {% if analysis_results %}
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Archivo Generado</th>
-                                    <th>Registros</th>
-                                    <th>Estado</th>
-                                    <th>Ultima Actualizacion</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for result in analysis_results %}
-                                <tr>
-                                    <td>{{ result.filename }}</td>
-                                    <td>{{ result.records|default:"-" }}</td>
-                                    <td>
-                                        <span class="badge bg-{% if result.status == 'success' %}success{% elif result.status == 'error' %}danger{% else %}secondary{% endif %}">
-                                            {% if result.status == 'success' %}
-                                                Exitoso
-                                            {% elif result.status == 'pending' %}
-                                                Pendiente
-                                            {% elif result.status == 'error' %}
-                                                Error
-                                            {% else %}
-                                                {{ result.status|capfirst }}
-                                            {% endif %}
-                                        </span>
-                                        {% if result.status == 'error' and result.error %}
-                                        <small class="text-muted d-block">{{ result.error }}</small>   
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if result.last_updated %}
-                                        {{ result.last_updated|date:"d/m/Y H:i" }}
+            <div class="card-body">
+                {% if analysis_results %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Archivo Generado</th>
+                                <th>Registros</th>
+                                <th>Estado</th>
+                                <th>Ultima Actualizacion</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in analysis_results %}
+                            <tr>
+                                <td>{{ result.filename }}</td>
+                                <td>{{ result.records|default:"-" }}</td>
+                                <td>
+                                    <span class="badge bg-{% if result.status == 'success' %}success{% elif result.status == 'error' %}danger{% else %}secondary{% endif %}">
+                                        {% if result.status == 'success' %}
+                                            Exitoso
+                                        {% elif result.status == 'pending' %}
+                                            Pendiente
+                                        {% elif result.status == 'error' %}
+                                            Error
                                         {% else %}
-                                        -
+                                            {{ result.status|capfirst }}
                                         {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No hay resultados de analisis disponibles</p>
-                    </div>
-                    {% endif %}
+                                    </span>
+                                    {% if result.status == 'error' and result.error %}
+                                    <small class="text-muted d-block">{{ result.error }}</small>   
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if result.last_updated %}
+                                    {{ result.last_updated|date:"d/m/Y H:i" }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-info-circle fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No hay resultados de analisis disponibles</p>
+                </div>
+                {% endif %}
+            </div>
             <div class="card-footer">
                 <small class="text-muted">Los archivos se procesan en: core/src/</small>
             </div>
@@ -5177,14 +5158,14 @@ document.addEventListener('DOMContentLoaded', function() {
                        value="{{ request.GET.q }}">
             </div>
             
-            <!-- Card Type Filter -->
+            <!-- Card Type Filter 
             <div class="col-md-2">
                 <select name="card_type" class="form-select form-select-lg">
                     <option value="">Todas</option>
                     <option value="MC" {% if request.GET.card_type == 'MC' %}selected{% endif %}>Mastercard</option>
                     <option value="VI" {% if request.GET.card_type == 'VI' %}selected{% endif %}>Visa</option>
                 </select>
-            </div>
+            </div> -->
             
             <!-- Date Range -->
             <div class="col-md-3">
