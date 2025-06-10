@@ -4169,27 +4169,27 @@ document.addEventListener('DOMContentLoaded', function() {
                             </tr>
                             <tr>
                                 <th scope="row">Familiar de algun accionista, proveedor o empleado</th>
-                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q2 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
-                                <th scope="row">Accionista de alguna compani­a del grupo</th>
-                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                                <th scope="row">Accionista de alguna companiÂ­a del grupo</th>
+                                <td class="text-center">{% if conflict.q3 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Actividades extralaborales</th>
-                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q4 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Negocios o bienes con empleados del grupo</th>
-                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q5 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Participacion en juntas o consejos directivos</th>
-                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q6 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Potencial conflicto diferente a los anteriores</th>
-                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q7 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Consciente del codigo de conducta empresarial</th>
@@ -4197,15 +4197,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             </tr>
                             <tr>
                                 <th scope="row">Veracidad de la informacion consignada</th>
-                                <td class="text-center">{% if conflict.q8 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q9 %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-times text-danger"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Familiar de algun funcionario publico</th>
-                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q10 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                             <tr>
                                 <th scope="row">Relacion con el sector publico o funcionario publico</th>
-                                <td class="text-center">{% if conflict.q1 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
+                                <td class="text-center">{% if conflict.q11 %}<i class="fas fa-check text-danger"></i>{% else %}<i class="fas fa-times text-success"></i>{% endif %}</td>
                             </tr>
                         </tbody>
                     </table>
