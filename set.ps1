@@ -1242,6 +1242,39 @@ Set-Content -Path "core/urls.py" -Value @"
 from django.contrib.auth import views as auth_views
 from django.urls import path
 from . import views
+from django.contrib.auth import get_user_model
+from django.contrib import messages
+from django.shortcuts import render, redirect
+
+def register_superuser(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        email = request.POST.get('email')
+        password1 = request.POST.get('password1')
+        password2 = request.POST.get('password2')
+        
+        if password1 != password2:
+            messages.error(request, "Passwords don't match")
+            return redirect('register')
+        
+        User = get_user_model()
+        if User.objects.filter(username=username).exists():
+            messages.error(request, "Username already exists")
+            return redirect('register')
+        
+        try:
+            user = User.objects.create_superuser(
+                username=username,
+                email=email,
+                password=password1
+            )
+            messages.success(request, f"Superuser {username} created successfully!")
+            return redirect('login')
+        except Exception as e:
+            messages.error(request, f"Error creating superuser: {str(e)}")
+            return redirect('register')
+    
+    return render(request, 'registration/register.html')
 
 urlpatterns = [
     path('', views.main, name='main'),
@@ -1257,9 +1290,8 @@ urlpatterns = [
     path('persons/import-mastercard/', views.import_mastercard_pdf, name='import_mastercard_pdf'),
     path('persons/import-visa/', views.import_visa_pdf, name='import_visa_pdf'),
     path('cards/', views.cards_view, name='cards_view'),
-    path('login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
-    path('accounts/login/', auth_views.LoginView.as_view(template_name='login.html')),
-    path('logout/', auth_views.LogoutView.as_view(template_name='logged_out.html'), name='logout'),
+    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('register/', register_superuser, name='register'),
 ]
 "@
 
@@ -3019,7 +3051,7 @@ else:
             </a>
             <form method="post" action="{% url 'logout' %}" class="d-inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-custom-primary" title="Cerrar sesion">
+                <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
                     <i class="fas fa-sign-out-alt"></i>
                 </button>
             </form>
@@ -5609,39 +5641,43 @@ document.addEventListener('DOMContentLoaded', function() {
                         {% csrf_token %}
 
                         <div class="mb-3">
-                            <input type="text" name="username" class="form-control form-control-lg" id="id_username" required>
+                            <input type="text" name="username" class="form-control form-control-lg" id="id_username" placeholder="Usuario" required>
                         </div>
 
                         <div class="mb-4">
-                            <input type="password" name="password" class="form-control form-control-lg" id="id_password" required>
+                            <input type="password" name="password" class="form-control form-control-lg" id="id_password" placeholder="Clave" required>
                         </div>
 
-                        <div class="d-grid gap-2">
+                        <div class="d-flex align-items-center justify-content-between">
                             <button type="submit" class="btn btn-custom-primary btn-lg">
-                                <i class="fas fa-sign-in-alt"></i>
+                                <i class="fas fa-sign-in-alt"style="color: green;"></i>
                             </button>
+                            <div>
+                                <a href="{% url 'register' %}" class="btn btn-custom-primary" title="Registrarse">  
+                                    <i class="fas fa-user-plus fa-lg"></i>
+                                </a>
+                                <a href="{% url 'password_reset' %}" class="btn btn-custom-primary" title="Recupera tu acceso">
+                                    <i class="fas fa-key fa-lg" style="color: orange;"></i>
+                                </a>
+                            </div>
                         </div>
 
                         <input type="hidden" name="next" value="{{ next }}">
                     </form>
-
-                    <div class="text-center mt-4">
-                        <a href="{% url 'password_reset' %}" class="text-decoration-none">Recupera tu acceso</a>  
-                    </div>
                 </div> 
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-"@ | Out-File -FilePath "core/templates/login.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/registration/login.html" -Encoding utf8
 
-# Create loggout template
+# Create login template
 @"
 {% extends "master.html" %}
 
-{% block title %}Acceso cerrado{% endblock %}
-{% block navbar_title %}Acceso cerrado{% endblock %}
+{% block title %}Registro{% endblock %}
+{% block navbar_title %}Registro{% endblock %}
 
 {% block navbar_buttons %}
 {% endblock %}
@@ -5650,22 +5686,57 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="row justify-content-center">
     <div class="col-md-6">
         <div class="card border-0 shadow">
-            <div class="card-body p-5 text-center">
+            <div class="card-body p-5">
                 <div style="align-items: center; text-align: center;"> 
                         <a href="/" style="text-decoration: none;" >
                             <div class="logoIN" style="margin: 20px auto;"></div>
                         </a>
-                        <h3 class="mb-4">Has finalizado</h3>
-                        <a href="{% url 'login' %}" class="text-decoration-none">
-                            Acceder de nuevo
-                        </a> 
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <form method="post" action="{% url 'register' %}">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <input type="text" name="username" class="form-control form-control-lg" id="username" placeholder="Usuario" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <input type="email" name="email" class="form-control form-control-lg" id="email" placeholder="Correo" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <input type="password" name="password1" class="form-control form-control-lg" id="password1" placeholder="Clave" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <input type="password" name="password2" class="form-control form-control-lg" id="password2" placeholder="Repite tu clave" required>
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-between">
+                            <button type="submit" class="btn btn-custom-primary btn-lg">
+                                <i class="fas fa-user-plus fa-lg" style="color: green;"></i>
+                            </button>
+                            <div>
+                                <a href="{% url 'login' %}" class="btn btn-custom-primary" title="Recupera tu acceso">
+                                    <i class="fas fa-sign-in-alt" style="color: rgb(0, 0, 255);"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="next" value="{{ next }}">
+                    </form>
                 </div> 
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-"@ | Out-File -FilePath "core/templates/logged_out.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/registration/register.html" -Encoding utf8
 
     # Update settings.py
     $settingsContent = Get-Content -Path ".\arpa\settings.py" -Raw
@@ -5694,9 +5765,8 @@ ADMIN_SITE_HEADER = "A R P A"
 ADMIN_SITE_TITLE = "ARPA Admin Portal"
 ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
 
-LOGIN_URL = 'accounts/login/'
-LOGIN_REDIRECT_URL = '/' 
-LOGOUT_REDIRECT_URL = '/logout/' 
+LOGIN_REDIRECT_URL = '/'  # Where to redirect after login
+LOGOUT_REDIRECT_URL = '/accounts/login/'  # Where to redirect after logout
 "@
 
     # Run migrations
@@ -5704,7 +5774,7 @@ LOGOUT_REDIRECT_URL = '/logout/'
     python manage.py migrate
 
     # Create superuser
-    python manage.py createsuperuser
+    #python manage.py createsuperuser
 
     python manage.py collectstatic --noinput
 
