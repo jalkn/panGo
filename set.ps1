@@ -8,6 +8,10 @@ function migratoDjango {
 
     Write-Host "🚀 Creating ARPA" -ForegroundColor $YELLOW
 
+    # Create Python virtual environment
+    python -m venv .venv
+    .\.venv\scripts\activate
+
     # Install required Python packages
     python.exe -m pip install --upgrade pip
     python -m pip install django whitenoise django-bootstrap-v5 openpyxl pandas xlrd>=2.0.1 pdfplumber fitz
@@ -161,6 +165,41 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import os
 import glob
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def main(request):
+    persons = Person.objects.all()
+    persons = _apply_person_filters_and_sorting(persons, request.GET)
+    
+    if 'export' in request.GET:
+        model_fields = ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado', 'revisar', 'comments']
+        return export_to_excel(persons, model_fields, 'persons_export')
+
+    """
+    Main view showing the list of persons with filtering and pagination
+    """
+    persons = Person.objects.all()
+    persons = _apply_person_filters_and_sorting(persons, request.GET)
+    
+    # Get dropdown values
+    dropdown_values = _get_dropdown_values()
+    
+    # Pagination
+    paginator = Paginator(persons, 1000)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'page_obj': page_obj,
+        'persons': page_obj.object_list,
+        'persons_count': persons.count(),
+        'current_order': request.GET.get('order_by', 'nombre_completo').replace('-', ''),
+        'current_direction': request.GET.get('sort_direction', 'asc'),
+        'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
+        **dropdown_values
+    }
+    return render(request, 'persons.html', context)
 
 def export_to_excel(queryset, model_fields, filename):
     response = HttpResponse(content_type='application/ms-excel')
@@ -185,6 +224,7 @@ def export_to_excel(queryset, model_fields, filename):
     wb.save(response)
     return response
 
+
 def import_period_excel(request):
     """View for importing period data from Excel files"""
     if request.method == 'POST' and request.FILES.get('period_excel_file'):
@@ -203,6 +243,7 @@ def import_period_excel(request):
         return HttpResponseRedirect('/persons/import/')
     
     return HttpResponseRedirect('/persons/import/')
+
 
 def _apply_person_filters_and_sorting(queryset, request_params):
     """
@@ -244,6 +285,7 @@ def _apply_person_filters_and_sorting(queryset, request_params):
         queryset = queryset.order_by(order_by)
         
     return queryset
+
 
 def _apply_finance_filters_and_sorting(queryset, request_params):
     """
@@ -308,6 +350,7 @@ def _apply_finance_filters_and_sorting(queryset, request_params):
     
     return queryset
 
+
 def _apply_conflict_filters_and_sorting(queryset, request_params):
     """
     Helper function to apply conflict-specific filters and sorting to a queryset.
@@ -359,6 +402,7 @@ def _apply_conflict_filters_and_sorting(queryset, request_params):
     
     return queryset
 
+
 def _get_dropdown_values():
     """
     Helper function to get distinct values for dropdown filters
@@ -368,39 +412,6 @@ def _get_dropdown_values():
         'companias': Person.objects.values_list('compania', flat=True).distinct().order_by('compania'),
         'estados': Person.objects.values_list('estado', flat=True).distinct().order_by('estado'),
     }
-
-def main(request):
-    persons = Person.objects.all()
-    persons = _apply_person_filters_and_sorting(persons, request.GET)
-    
-    if 'export' in request.GET:
-        model_fields = ['cedula', 'nombre_completo', 'cargo', 'correo', 'compania', 'estado', 'revisar', 'comments']
-        return export_to_excel(persons, model_fields, 'persons_export')
-
-    """
-    Main view showing the list of persons with filtering and pagination
-    """
-    persons = Person.objects.all()
-    persons = _apply_person_filters_and_sorting(persons, request.GET)
-    
-    # Get dropdown values
-    dropdown_values = _get_dropdown_values()
-    
-    # Pagination
-    paginator = Paginator(persons, 1000)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    context = {
-        'page_obj': page_obj,
-        'persons': page_obj.object_list,
-        'persons_count': persons.count(),
-        'current_order': request.GET.get('order_by', 'nombre_completo').replace('-', ''),
-        'current_direction': request.GET.get('sort_direction', 'asc'),
-        'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
-        **dropdown_values
-    }
-    return render(request, 'persons.html', context)
 
 def process_financial_data():
     """Process financial data from inTrends.xlsx and update FinancialReport model"""
@@ -492,6 +503,7 @@ def process_financial_data():
         print(f"Error processing financial data: {str(e)}")
         return False
 
+
 def details(request, cedula):
     """View showing details for a single person"""
     myperson = Person.objects.get(cedula=cedula)
@@ -513,6 +525,7 @@ def details(request, cedula):
         'financial_reports': financial_reports,
         'conflicts': conflicts
     })
+
 
 def get_analysis_results():
     """Helper function to get analysis results from generated files"""
@@ -568,6 +581,7 @@ def get_analysis_results():
     
     return results
 
+
 def import_persons(request):
     """
     View for importing only personas data from Excel files (saves to Personas.xlsx)
@@ -593,6 +607,7 @@ def import_persons(request):
     return render(request, 'import.html', {
         'analysis_results': analysis_results
     })
+
 
 def process_conflict_data():
     """Process conflict data from inTrends.xlsx and update Conflict model"""
@@ -653,6 +668,7 @@ def process_conflict_data():
     except Exception as e:
         print(f"Error processing conflict data: {str(e)}")
         return False
+
 
 def process_persons_data(request):
     """
@@ -753,6 +769,7 @@ def process_persons_data(request):
         traceback.print_exc()
     
     return HttpResponseRedirect('/persons/import/')
+
 
 def import_protected_excel(request):
     """
@@ -911,6 +928,7 @@ def import_protected_excel(request):
     return HttpResponseRedirect('/persons/import/')
 
 
+
 def import_conflict_excel(request):
     """View for importing conflict data from Excel files"""
     if request.method == 'POST' and request.FILES.get('conflict_excel_file'):
@@ -952,6 +970,7 @@ def import_conflict_excel(request):
     
     return HttpResponseRedirect('/persons/import/')
 
+
 def finance_view(request):
     persons = Person.objects.all().prefetch_related('financial_reports')
     persons = _apply_finance_filters_and_sorting(persons, request.GET)
@@ -983,6 +1002,7 @@ def finance_view(request):
     }
     return render(request, 'finances.html', context)
 
+
 def conflicts_view(request):
     persons = Person.objects.all().prefetch_related('conflicts')
     persons = _apply_conflict_filters_and_sorting(persons, request.GET)
@@ -1009,6 +1029,7 @@ def conflicts_view(request):
         **dropdown_values
     }
     return render(request, 'conflicts.html', context)
+
 
 def alerts_view(request):
     """View showing all records marked for review or with comments"""
@@ -1039,6 +1060,7 @@ def alerts_view(request):
         **dropdown_values
     }
     return render(request, 'alerts.html', context)
+
 
 def import_mastercard_pdf(request):
     """View for importing Mastercard PDF files"""
@@ -1073,6 +1095,7 @@ def import_mastercard_pdf(request):
         
     return HttpResponseRedirect('/persons/import/')
 
+
 def import_visa_pdf(request):
     """View for importing Visa PDF files"""
     if request.method == 'POST' and request.FILES.get('visa_pdf_file'):
@@ -1105,6 +1128,7 @@ def import_visa_pdf(request):
             messages.error(request, f'Error guardando o procesando archivo Visa: {str(e)}')
         
     return HttpResponseRedirect('/persons/import/')
+
 
 def cards_view(request):
     """View showing all card transactions"""
@@ -1169,6 +1193,7 @@ def cards_view(request):
     }
     return render(request, 'cards.html', context)
 
+
 def process_card_data(file_path, card_type):
     """Process card data from Excel and update Card model"""
     try:
@@ -1214,6 +1239,7 @@ def process_card_data(file_path, card_type):
 
     # Create urls.py for core app
 Set-Content -Path "core/urls.py" -Value @"
+from django.contrib.auth import views as auth_views
 from django.urls import path
 from . import views
 
@@ -1231,6 +1257,7 @@ urlpatterns = [
     path('persons/import-mastercard/', views.import_mastercard_pdf, name='import_mastercard_pdf'),
     path('persons/import-visa/', views.import_visa_pdf, name='import_visa_pdf'),
     path('cards/', views.cards_view, name='cards_view'),
+    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 ]
 "@
 
@@ -1333,6 +1360,7 @@ admin.site.register(Card, CardAdmin)
 Set-Content -Path "arpa/urls.py" -Value @"
 from django.contrib import admin
 from django.urls import include, path
+from django.contrib.auth import views as auth_views
 
 # Customize default admin interface
 admin.site.site_header = 'A R P A'
@@ -1340,8 +1368,9 @@ admin.site.site_title = 'ARPA Admin Portal'
 admin.site.index_title = 'Bienvenido a A R P A'
 
 urlpatterns = [
-    path('persons/', include('core.urls')),
     path('admin/', admin.site.urls),
+    path('persons/', include('core.urls')),
+    path('accounts/', include('django.contrib.auth.urls')),  # Add this line
     path('', include('core.urls')), 
 ]
 "@
@@ -1353,7 +1382,8 @@ urlpatterns = [
         "core/static/css",
         "core/static/js",
         "core/templates",
-        "core/templates/admin"
+        "core/templates/admin",
+        "core/templates/registration"
     )
     foreach ($dir in $directories) {
         New-Item -Path $dir -ItemType Directory -Force
@@ -1382,11 +1412,11 @@ def remove_excel_password(input_file, output_file=None):
             # Check if file is encrypted
             if office_file.is_encrypted():
                 # Prompt for password if encrypted
-                password = getpass.getpass("El archivo está protegido con contraseña. Por favor ingrésala: ")
+                password = getpass.getpass("El archivo está protegido con contrasena: ")
                 try:
                     office_file.load_key(password=password)
                 except Exception as e:
-                    log_message(f"Error: Contraseña incorrecta o no válida")
+                    log_message(f"Error: Contrasena incorrecta")
                     return False
             else:
                 # File is not encrypted
@@ -2971,23 +3001,30 @@ else:
     <link rel="stylesheet" href="{% static 'css/freeze.css' %}">
 </head>
 <body>
+    {% if user.is_authenticated %}
     <div class="topnav-container">
         <a href="/" style="text-decoration: none;">
             <div class="logoIN"></div>
         </a>
         <div class="navbar-title">{% block navbar_title %}ARPA{% endblock %}</div>
-            <!-- Update the navbar-buttons section in master.html -->
-            <div class="navbar-buttons">
-                {% block navbar_buttons %}
-                <a href="/admin/" class="btn btn-outline-dark" title="Admin">
-                    <i class="fas fa-wrench"></i>
-                </a>
-                <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
-                    <i class="fas fa-database"></i>
-                </a>
-                {% endblock %}
-            </div>
+        <div class="navbar-buttons">
+            {% block navbar_buttons %}
+            <a href="/admin/" class="btn btn-outline-dark" title="Admin">
+                <i class="fas fa-wrench"></i>
+            </a>
+            <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
+                <i class="fas fa-database"></i>
+            </a>
+            <form method="post" action="{% url 'logout' %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </form>
+            {% endblock %}
+        </div>
     </div>
+    {% endif %}
     
     <div class="main-container">
         {% if messages %}
@@ -3347,11 +3384,6 @@ document.addEventListener('DOMContentLoaded', function() {
         {% if alerts_count == 0 %}
             <span class="badge bg-secondary">0</span>
         {% endif %}
-        {% if alerts_count > 0 %}
-            <span class="visually-hidden">Alertas</span>
-        {% else %}
-            <span class="visually-hidden">Sin alertas</span>
-        {% endif %}
         <i class="fas fa-bell" style="color: red;"></i>
     </a>
     <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
@@ -3361,16 +3393,17 @@ document.addEventListener('DOMContentLoaded', function() {
         {% if import_count == 0 %}
             <span class="badge bg-secondary">0</span>
         {% endif %}
-        {% if import_count > 0 %}
-            <span class="visually-hidden">Importaciones pendientes</span>
-        {% else %}
-            <span class="visually-hidden">Sin importaciones pendientes</span>
-        {% endif %}
         <i class="fas fa-upload"></i>
     </a>
     <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Exportar">
         <i class="fas fa-file-excel"></i>
     </a>
+    <form method="post" action="{% url 'logout' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
+            <i class="fas fa-sign-out-alt"></i>
+        </button>
+    </form>
 </div>
 {% endblock %}
 
@@ -3588,6 +3621,12 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Exportar">
         <i class="fas fa-file-excel"></i>
     </a>
+    <form method="post" action="{% url 'logout' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
+            <i class="fas fa-sign-out-alt"></i>
+        </button>
+    </form>
 </div>
 {% endblock %}
 
@@ -3806,22 +3845,27 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/finance/" class="btn btn-custom-primary">
         <i class="fas fa-chart-line" style="color: green;"></i>
     </a>
-    </a>
-        <a href="/cards/" class="btn btn-custom-primary" title="Tarjetas">
+    <a href="/cards/" class="btn btn-custom-primary" title="Tarjetas">
         <i class="far fa-credit-card" style="color: blue;"></i>
     </a>
     <a href="/conflicts/" class="btn btn-custom-primary">
         <i class="fas fa-balance-scale" style="color: orange;"></i>
     </a>
-    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-custom-primary">
-                <i class="fas fa-database"></i>
-            </button>
-    </form>
-    <a href="/" class="btn btn-custom-primary">
-        <i class="fas fa-arrow-right"></i>
+    <a href="/alerts/" class="btn btn-custom-primary">
+        <i class="fas fa-bell" style="color: red;"></i>
     </a>
+    <form method="post" action="{% url 'process_persons' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-custom-primary">
+            <i class="fas fa-database"></i>
+        </button>
+    </form>
+    <form method="post" action="{% url 'logout' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
+            <i class="fas fa-sign-out-alt"></i>
+        </button>
+    </form>
 </div>
 {% endblock %}
 
@@ -4332,6 +4376,12 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Exportar">
         <i class="fas fa-file-excel"></i>
     </a>
+    <form method="post" action="{% url 'logout' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
+            <i class="fas fa-sign-out-alt"></i>
+        </button>
+    </form>
 </div>
 {% endblock %}
 
@@ -4872,6 +4922,12 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Exportar">
         <i class="fas fa-file-excel"></i>
     </a>
+    <form method="post" action="{% url 'logout' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
+            <i class="fas fa-sign-out-alt"></i>
+        </button>
+    </form>
 </div>
 {% endblock %}
 
@@ -5141,6 +5197,12 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green">
         <i class="fas fa-file-excel"></i>
     </a>
+    <form method="post" action="{% url 'logout' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
+            <i class="fas fa-sign-out-alt"></i>
+        </button>
+    </form>
 </div>
 {% endblock %}
 
@@ -5503,6 +5565,101 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/cards.html" -Encoding utf8
 
+# Create login template
+@"
+{% extends "master.html" %}
+
+{% block title %}Acceder{% endblock %}
+{% block navbar_title %}Acceder{% endblock %}
+
+{% block navbar_buttons %}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-0 shadow">
+            <div class="card-body p-5">
+                <div style="align-items: center; text-align: center;"> 
+                        <a href="/" style="text-decoration: none;" >
+                            <div class="logoIN" style="margin: 20px auto;"></div>
+                        </a>
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        Tu nombre de usuario y clave no coinciden. Por favor intenta de nuevo.
+                    </div>
+                    {% endif %}
+
+                    {% if next %}
+                        {% if user.is_authenticated %}
+                        <div class="alert alert-warning">
+                            Tu cuenta no tiene acceso a esta pagina. Para continuar,
+                            por favor ingresa con una cuenta que tenga acceso.
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">
+                            Por favor accede con tu clave para ver esta pagina.
+                        </div>
+                        {% endif %}
+                    {% endif %}
+
+                    <form method="post" action="{% url 'login' %}">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <input type="text" name="username" class="form-control form-control-lg" id="id_username" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <input type="password" name="password" class="form-control form-control-lg" id="id_password" required>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-custom-primary btn-lg">
+                                <i class="fas fa-sign-in-alt"></i>
+                            </button>
+                        </div>
+
+                        <input type="hidden" name="next" value="{{ next }}">
+                    </form>
+
+                    <div class="text-center mt-4">
+                        <a href="{% url 'password_reset' %}" class="text-decoration-none">Recupera tu acceso</a>  
+                    </div>
+                </div> 
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+"@ | Out-File -FilePath "core/templates/registration/login.html" -Encoding utf8
+
+# Create loggout template
+@"
+{% extends "master.html" %}
+
+{% block title %}Acceso cerrado{% endblock %}
+{% block navbar_title %}Acceso cerrado{% endblock %}
+
+{% block navbar_buttons %}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-0 shadow">
+            <div class="card-body p-5 text-center">
+                <h2 class="mb-4">Has cerrado el acceso</h2>
+                <p class="mb-4">Gracias por usar ARPA.</p>
+                <a href="{% url 'login' %}" class="btn btn-custom-primary">
+                    <i class="fas fa-sign-in-alt"></i> Ingresar nuevamente
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+"@ | Out-File -FilePath "core/templates/registration/logged_out.html" -Encoding utf8
 
     # Update settings.py
     $settingsContent = Get-Content -Path ".\arpa\settings.py" -Raw
@@ -5530,6 +5687,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 ADMIN_SITE_HEADER = "A R P A"
 ADMIN_SITE_TITLE = "ARPA Admin Portal"
 ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
+
+LOGIN_REDIRECT_URL = '/'  # Where to redirect after login
+LOGOUT_REDIRECT_URL = '/accounts/login/'  # Where to redirect after logout
 "@
 
     # Run migrations
@@ -5537,7 +5697,7 @@ ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
     python manage.py migrate
 
     # Create superuser
-    #python manage.py createsuperuser
+    python manage.py createsuperuser
 
     python manage.py collectstatic --noinput
 
