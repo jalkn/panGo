@@ -1257,7 +1257,9 @@ urlpatterns = [
     path('persons/import-mastercard/', views.import_mastercard_pdf, name='import_mastercard_pdf'),
     path('persons/import-visa/', views.import_visa_pdf, name='import_visa_pdf'),
     path('cards/', views.cards_view, name='cards_view'),
-    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
+    path('accounts/login/', auth_views.LoginView.as_view(template_name='login.html')),
+    path('logout/', auth_views.LogoutView.as_view(template_name='logged_out.html'), name='logout'),
 ]
 "@
 
@@ -3017,7 +3019,7 @@ else:
             </a>
             <form method="post" action="{% url 'logout' %}" class="d-inline">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
+                <button type="submit" class="btn btn-custom-primary" title="Cerrar sesion">
                     <i class="fas fa-sign-out-alt"></i>
                 </button>
             </form>
@@ -5632,7 +5634,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 {% endblock %}
-"@ | Out-File -FilePath "core/templates/registration/login.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/login.html" -Encoding utf8
 
 # Create loggout template
 @"
@@ -5649,17 +5651,21 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="col-md-6">
         <div class="card border-0 shadow">
             <div class="card-body p-5 text-center">
-                <h2 class="mb-4">Has cerrado el acceso</h2>
-                <p class="mb-4">Gracias por usar ARPA.</p>
-                <a href="{% url 'login' %}" class="btn btn-custom-primary">
-                    <i class="fas fa-sign-in-alt"></i> Ingresar nuevamente
-                </a>
+                <div style="align-items: center; text-align: center;"> 
+                        <a href="/" style="text-decoration: none;" >
+                            <div class="logoIN" style="margin: 20px auto;"></div>
+                        </a>
+                        <h3 class="mb-4">Has finalizado</h3>
+                        <a href="{% url 'login' %}" class="text-decoration-none">
+                            Acceder de nuevo
+                        </a> 
+                </div> 
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-"@ | Out-File -FilePath "core/templates/registration/logged_out.html" -Encoding utf8
+"@ | Out-File -FilePath "core/templates/logged_out.html" -Encoding utf8
 
     # Update settings.py
     $settingsContent = Get-Content -Path ".\arpa\settings.py" -Raw
@@ -5688,8 +5694,9 @@ ADMIN_SITE_HEADER = "A R P A"
 ADMIN_SITE_TITLE = "ARPA Admin Portal"
 ADMIN_INDEX_TITLE = "Bienvenido a A R P A"
 
-LOGIN_REDIRECT_URL = '/'  # Where to redirect after login
-LOGOUT_REDIRECT_URL = '/accounts/login/'  # Where to redirect after logout
+LOGIN_URL = 'accounts/login/'
+LOGIN_REDIRECT_URL = '/' 
+LOGOUT_REDIRECT_URL = '/logout/' 
 "@
 
     # Run migrations
