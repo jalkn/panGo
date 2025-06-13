@@ -970,7 +970,7 @@ def import_conflict_excel(request):
     
     return HttpResponseRedirect('/persons/import/')
 
-
+@login_required
 def finance_view(request):
     persons = Person.objects.all().prefetch_related('financial_reports')
     persons = _apply_finance_filters_and_sorting(persons, request.GET)
@@ -1002,7 +1002,7 @@ def finance_view(request):
     }
     return render(request, 'finances.html', context)
 
-
+@login_required
 def conflicts_view(request):
     persons = Person.objects.all().prefetch_related('conflicts')
     persons = _apply_conflict_filters_and_sorting(persons, request.GET)
@@ -1030,7 +1030,7 @@ def conflicts_view(request):
     }
     return render(request, 'conflicts.html', context)
 
-
+@login_required
 def alerts_view(request):
     """View showing all records marked for review or with comments"""
     persons = Person.objects.filter(Q(revisar=True) | ~Q(comments='')).distinct()
@@ -1061,78 +1061,198 @@ def alerts_view(request):
     }
     return render(request, 'alerts.html', context)
 
-
-def import_mastercard_pdf(request):
-    """View for importing Mastercard PDF files"""
-    if request.method == 'POST' and request.FILES.get('mastercard_pdf_file'):
-        pdf_file = request.FILES['mastercard_pdf_file']
-        password = request.POST.get('pdf_password', '')
+def import_visa_pdfs(request):
+    if request.method == 'POST' and request.FILES.getlist('visa_pdf_files'):
+        pdf_files = request.FILES.getlist('visa_pdf_files')
+        password = request.POST.get('visa_pdf_password', '')
         
         try:
-            # Save the uploaded file to core/src/GA consolidado MC/
-            os.makedirs('core/src/GA consolidado MC', exist_ok=True)
-            temp_path = "core/src/GA consolidado MC/mastercard.pdf"
-            with open(temp_path, 'wb+') as destination:
-                for chunk in pdf_file.chunks():
-                    destination.write(chunk)
+            # Create visa directory if it doesn't exist
+            visa_dir = "core/src/visa"
+            os.makedirs(visa_dir, exist_ok=True)
             
-            # Store password in a temporary file
-            with open("core/src/GA consolidado MC/password.txt", 'w') as f:
-                f.write(password)
+            # Save password to password.txt if provided
+            password_file = os.path.join(visa_dir, "password.txt")
+            if password:
+                with open(password_file, 'w') as f:
+                    f.write(password)
             
-            # Process the PDF using mc.py
-            from core.mc import main as process_mc_pdf
-            process_mc_pdf()  # This creates the Excel file
+            # Save all uploaded PDF files
+            pdf_paths = []
+            for pdf_file in pdf_files:
+                file_path = os.path.join(visa_dir, pdf_file.name)
+                with open(file_path, 'wb+') as destination:
+                    for chunk in pdf_file.chunks():
+                        destination.write(chunk)
+                pdf_paths.append(file_path)
+                print(f"Saved PDF: {file_path}")  # DEBUG
             
-            # Now process the Excel data into Card model
-            excel_path = "core/src/extractos_resultado_MC_*.xlsx"
-            latest_file = max(glob.glob(excel_path), key=os.path.getctime)
-            process_card_data(latest_file, 'MC')
+            # Run visa.py script
+            from core.visa import main as process_visa
+            process_visa()
             
-            messages.success(request, 'Archivo Mastercard importado y procesado exitosamente!')
+            # Process the generated Excel file and save to Card model
+            visa_excel_files = glob.glob(os.path.join(visa_dir, "VISA_*.xlsx"))
+            if not visa_excel_files:
+                messages.error(request, 'No se encontraron archivos Excel generados por el procesador VISA')
+                return HttpResponseRedirect('/persons/import/')
+                
+            latest_file = max(visa_excel_files, key=os.path.getctime)
+            print(f"Processing Visa Excel file: {latest_file}")  # DEBUG
+            
+            try:
+                df = pd.read_excel(latest_file)
+                print(f"Found {len(df)} transactions in Excel file")  # DEBUG
+            except Exception as e:
+                messages.error(request, f'Error leyendo archivo Excel: {str(e)}')
+                return HttpResponseRedirect('/persons/import/')
+            
+            created_count = 0
+            no_person_count = 0
+            error_count = 0
+            person_matches = {}
+
+            for index, row in df.iterrows():
+                try:
+                    cardholder_name = str(row['Tarjetahabiente']).strip()
+                    print(f"\nProcessing transaction {index + 1}/{len(df)} for: {cardholder_name}")  # DEBUG
+                    
+                    # Skip if we've already tried to match this person
+                    if cardholder_name in person_matches:
+                        person = person_matches[cardholder_name]
+                        if not person:
+                            no_person_count += 1
+                            print(f"⚠ [Cached] No person found for: {cardholder_name}")
+                            continue
+                    
+                    # Try multiple matching strategies
+                    person = None
+                    
+                    # 1. Exact name match (case insensitive)
+                    person = Person.objects.filter(
+                        nombre_completo__iexact=cardholder_name
+                    ).first()
+                    
+                    # 2. Contains match with normalized whitespace
+                    if not person:
+                        person = Person.objects.filter(
+                            nombre_completo__iregex=r'\y{}\y'.format(
+                                re.escape(cardholder_name)
+                            )
+                        ).first()
+                    
+                    # 3. Split name and match parts
+                    if not person:
+                        name_parts = [p.strip() for p in re.split(r'\s+', cardholder_name) if p.strip()]
+                        if len(name_parts) >= 2:
+                            # Try matching first name + last name
+                            first_name = name_parts[0]
+                            last_name = name_parts[-1]
+                            
+                            # Match first name and any part of last name
+                            person = Person.objects.filter(
+                                nombre_completo__iregex=rf'\y{re.escape(first_name)}\y.*\y{re.escape(last_name)}\y'
+                            ).first()
+                            
+                            # Try alternative combinations if still not found
+                            if not person and len(name_parts) > 2:
+                                person = Person.objects.filter(
+                                    nombre_completo__iregex=rf'\y{re.escape(first_name)}\y.*\y{re.escape(" ".join(name_parts[-2:]))}\y'
+                                ).first()
+                    
+                    # Cache the result for this cardholder name
+                    person_matches[cardholder_name] = person
+                    
+                    if not person:
+                        no_person_count += 1
+                        print(f"⚠ No person found for: {cardholder_name}")
+                        continue
+                    
+                    print(f"✓ Found matching person: {person.nombre_completo} (ID: {person.cedula})")
+                    
+                    # Process numeric values safely
+                    def safe_float(value):
+                        try:
+                            if pd.isna(value):
+                                return None
+                            if isinstance(value, str):
+                                value = value.replace('.', '').replace(',', '.')
+                            return float(value)
+                        except (ValueError, TypeError):
+                            return None
+                    
+                    # Create card record
+                    Card.objects.create(
+                        person=person,
+                        card_type='VI' if str(row['Número de Tarjeta']).startswith('4') else 'MC',
+                        card_number=str(row['Número de Tarjeta']),
+                        transaction_date=pd.to_datetime(row['Fecha de Transacción']).date(),
+                        description=str(row['Descripción'])[:255],  # Ensure it fits in CharField
+                        original_value=safe_float(row['Valor Original']),
+                        exchange_rate=safe_float(row['Tasa Pactada']),
+                        charges=safe_float(row['Cargos y Abonos']),
+                        balance=safe_float(row['Saldo a Diferir']),
+                        installments=str(row['Cuotas'])[:20] if pd.notna(row['Cuotas']) else None,
+                        source_file=str(row['Archivo'])[:255],
+                        page_number=int(row['Página']) if pd.notna(row['Página']) else 0
+                    )
+                    created_count += 1
+                    print("✓ Transaction saved successfully")
+                    
+                except Exception as e:
+                    error_count += 1
+                    print(f"⚠ Error processing transaction {index + 1}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+            
+            # Prepare result message
+            msg = f"Procesamiento completado: {created_count} transacciones importadas"
+            if no_person_count:
+                msg += f", {no_person_count} sin persona correspondiente"
+            if error_count:
+                msg += f", {error_count} con errores"
+            
+            messages.success(request, msg)
+            
+            # Print summary to console
+            print("\n" + "="*50)
+            print("IMPORT SUMMARY")
+            print(f"- Total transactions processed: {len(df)}")
+            print(f"- Successfully imported: {created_count}")
+            print(f"- No person found: {no_person_count}")
+            print(f"- Errors: {error_count}")
+            print("="*50)
+            
+            # Clean up files
+            try:
+                # Delete PDF files
+                for pdf_path in pdf_paths:
+                    if os.path.exists(pdf_path):
+                        os.remove(pdf_path)
+                
+                # Delete password file if it exists
+                if os.path.exists(password_file):
+                    os.remove(password_file)
+                    
+                print("✓ Temporary files cleaned up")
+            except Exception as clean_error:
+                messages.warning(request, f'Archivos VISA procesados pero hubo un error limpiando: {str(clean_error)}')
+                print(f"⚠ Error cleaning files: {str(clean_error)}")
+            
         except Exception as e:
-            messages.error(request, f'Error guardando o procesando archivo Mastercard: {str(e)}')
+            messages.error(request, f'Error procesando archivos VISA: {str(e)}')
+            print(f"⚠ Critical error in import_visa_pdfs: {str(e)}")
+            import traceback
+            traceback.print_exc()
         
+        return HttpResponseRedirect('/persons/import/')
+    
     return HttpResponseRedirect('/persons/import/')
 
-
-def import_visa_pdf(request):
-    """View for importing Visa PDF files"""
-    if request.method == 'POST' and request.FILES.get('visa_pdf_file'):
-        pdf_file = request.FILES['visa_pdf_file']
-        password = request.POST.get('pdf_password', '')
-        
-        try:
-            # Save the uploaded file to core/src/GA consolidado Visa/
-            os.makedirs('core/src/GA consolidado Visa', exist_ok=True)
-            temp_path = "core/src/GA consolidado Visa/visa.pdf"
-            with open(temp_path, 'wb+') as destination:
-                for chunk in pdf_file.chunks():
-                    destination.write(chunk)
-            
-            # Store password in a temporary file
-            with open("core/src/GA consolidado Visa/password.txt", 'w') as f:
-                f.write(password)
-            
-            # Process the PDF using visa.py
-            from core.visa import main as process_visa_pdf
-            process_visa_pdf()  # This creates the Excel file
-            
-            # Now process the Excel data into Card model
-            excel_path = "core/src/extractos_resultado_VISA_*.xlsx"
-            latest_file = max(glob.glob(excel_path), key=os.path.getctime)
-            process_card_data(latest_file, 'VI')
-            
-            messages.success(request, 'Archivo Visa importado y procesado exitosamente!')
-        except Exception as e:
-            messages.error(request, f'Error guardando o procesando archivo Visa: {str(e)}')
-        
-    return HttpResponseRedirect('/persons/import/')
-
-
+@login_required
 def cards_view(request):
-    """View showing all card transactions"""
-    # Get all cards with related person data
+    # Start with all cards and select related person
     cards = Card.objects.all().select_related('person')
     
     # Apply filters
@@ -1140,12 +1260,12 @@ def cards_view(request):
     card_type_filter = request.GET.get('card_type', '')
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
-    order_by = request.GET.get('order_by', '-transaction_date')
+    order_by = request.GET.get('order_by', '-transaction_date')  # Default to newest first
+    sort_direction = request.GET.get('sort_direction', 'desc')
     
     if search_query:
         cards = cards.filter(
             Q(person__nombre_completo__icontains=search_query) |
-            Q(person__cedula__icontains=search_query) |
             Q(description__icontains=search_query) |
             Q(card_number__icontains=search_query)
         )
@@ -1154,90 +1274,42 @@ def cards_view(request):
         cards = cards.filter(card_type=card_type_filter)
     
     if date_from:
-        cards = cards.filter(transaction_date__gte=date_from)
+        try:
+            cards = cards.filter(transaction_date__gte=date_from)
+        except:
+            pass
     
     if date_to:
-        cards = cards.filter(transaction_date__lte=date_to)
+        try:
+            cards = cards.filter(transaction_date__lte=date_to)
+        except:
+            pass
     
-    # Apply sorting
+    # Apply sorting - handle descending order
+    if sort_direction == 'desc' and not order_by.startswith('-'):
+        order_by = f'-{order_by}'
+    elif sort_direction == 'asc' and order_by.startswith('-'):
+        order_by = order_by[1:]
+    
     cards = cards.order_by(order_by)
     
-    # Split into MC and Visa
-    mc_cards = cards.filter(card_type='MC')
-    visa_cards = cards.filter(card_type='VI')
-    
-    if 'export' in request.GET:
-        model_fields = [
-            'person__cedula', 'person__nombre_completo', 'card_type', 
-            'card_number', 'transaction_date', 'description',
-            'original_value', 'exchange_rate', 'charges', 'balance',
-            'installments', 'source_file'
-        ]
-        return export_to_excel(cards, model_fields, 'cards_export')
-    
     # Pagination
-    mc_paginator = Paginator(mc_cards, 50)
-    mc_page_number = request.GET.get('mc_page')
-    mc_page_obj = mc_paginator.get_page(mc_page_number)
-    
-    visa_paginator = Paginator(visa_cards, 50)
-    visa_page_number = request.GET.get('visa_page')
-    visa_page_obj = visa_paginator.get_page(visa_page_number)
+    paginator = Paginator(cards, 25)  # Reduced from 100 to 25 for better UX
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
     
     context = {
-        'mc_page_obj': mc_page_obj,
-        'visa_page_obj': visa_page_obj,
+        'page_obj': page_obj,
+        'cards': page_obj.object_list,  # This should be used in template
+        'cards_count': cards.count(),
         'current_order': order_by.replace('-', ''),
-        'current_direction': 'desc' if order_by.startswith('-') else 'asc',
-        'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction']},
+        'current_direction': sort_direction,
+        'all_params': {k: v for k, v in request.GET.items() if k not in ['order_by', 'sort_direction', 'page']},
     }
     return render(request, 'cards.html', context)
-
-
-def process_card_data(file_path, card_type):
-    """Process card data from Excel and update Card model"""
-    try:
-        df = pd.read_excel(file_path)
-        
-        for _, row in df.iterrows():
-            try:
-                # Find person by name (since we might not have cedula in card data)
-                person = Person.objects.filter(
-                    nombre_completo__iexact=row['Tarjetahabiente']
-                ).first()
-                
-                if not person:
-                    print(f"Person not found: {row['Tarjetahabiente']}")
-                    continue
-                    
-                # Create or update card record
-                Card.objects.update_or_create(
-                    person=person,
-                    card_type=card_type,
-                    card_number=row['Número de Tarjeta'],
-                    transaction_date=row['Fecha de Transacción'],
-                    defaults={
-                        'description': row['Descripción'],
-                        'original_value': row['Valor Original'],
-                        'exchange_rate': row.get('Tasa Pactada'),
-                        'charges': row.get('Cargos y Abonos'),
-                        'balance': row.get('Saldo a Diferir'),
-                        'installments': row.get('Cuotas'),
-                        'source_file': row['Archivo'],
-                        'page_number': row.get('Página', 1),
-                    }
-                )
-            except Exception as e:
-                print(f"Error processing row: {e}")
-                continue
-                
-        return True
-    except Exception as e:
-        print(f"Error processing card data: {e}")
-        return False
 "@
 
-    # Create urls.py for core app
+# Create urls.py for core app
 Set-Content -Path "core/urls.py" -Value @"
 from django.contrib.auth import views as auth_views
 from django.urls import path
@@ -1287,11 +1359,10 @@ urlpatterns = [
     path('finance/', views.finance_view, name='finance_view'),
     path('conflicts/', views.conflicts_view, name='conflicts_view'),
     path('alerts/', views.alerts_view, name='alerts_view'),
-    path('persons/import-mastercard/', views.import_mastercard_pdf, name='import_mastercard_pdf'),
-    path('persons/import-visa/', views.import_visa_pdf, name='import_visa_pdf'),
-    path('cards/', views.cards_view, name='cards_view'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('register/', register_superuser, name='register'),
+    path('visa/import/', views.import_visa_pdfs, name='import_visa_pdfs'),
+    path('cards/', views.cards_view, name='cards_view'),
 ]
 "@
 
@@ -2895,73 +2966,72 @@ import re
 import os
 from datetime import datetime
 
-# Change these lines at the top of the file:
-pdf_folder = "core/src/GA consolidado Visa"
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-os.makedirs("core/src", exist_ok=True)  # Changed to core/src
-output_excel = os.path.join("core/src", f"extractos_resultado_VISA_{timestamp}.xlsx")
-pdf_password = ""
-password_file = os.path.join(pdf_folder, "password.txt")
-if os.path.exists(password_file):
-    with open(password_file, 'r') as f:
-        pdf_password = f.read().strip()
- 
-# Columnas incluyendo "Página"
-column_names = [
+# Configuration
+PDF_FOLDER = "core/src/visa"
+COLUMN_NAMES = [
     "Archivo", "Tarjetahabiente", "Número de Tarjeta", "Número de Autorización",
     "Fecha de Transacción", "Descripción", "Valor Original",
     "Tasa Pactada", "Tasa EA Facturada", "Cargos y Abonos",
     "Saldo a Diferir", "Cuotas", "Página"
 ]
- 
-# Patrón para detectar transacciones
-pattern_transaccion = re.compile(
+
+# Patterns
+TRANSACTION_PATTERN = re.compile(
     r"(\d{6})\s+(\d{2}/\d{2}/\d{4})\s+(.+?)\s+([\d,.]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,.]+)\s+([\d,.]+)\s+(\d+/\d+|0\.00)"
 )
- 
-# Patrón para número de tarjeta
-pattern_tarjeta = re.compile(r"TARJETA:\s+\*{12}(\d{4})")
- 
-data_rows = []
-pdf_files = [f for f in os.listdir(pdf_folder) if f.lower().endswith(".pdf")]
- 
-for pdf_file in pdf_files:
-    pdf_path = os.path.join(pdf_folder, pdf_file)
-    print(f"📄 Procesando: {pdf_file}")
- 
+CARD_PATTERN = re.compile(r"TARJETA:\s+\*{12}(\d{4})")
+
+def get_password():
+    """Get password from password.txt if it exists"""
+    password_file = os.path.join(PDF_FOLDER, "password.txt")
+    if os.path.exists(password_file):
+        with open(password_file, 'r') as f:
+            return f.read().strip()
+    return ""
+
+def clean_value(value):
+    """Clean and format numeric values"""
+    return value.replace(".", "#").replace(",", ".").replace("#", ",")
+
+def process_pdf(pdf_path, password):
+    """Process a single PDF file and extract data"""
+    data_rows = []
     try:
-        with pdfplumber.open(pdf_path, password=pdf_password) as pdf:
-            tarjetahabiente = ""
-            tarjeta = ""
-            tiene_transacciones = False
-            last_page_number = 1  # predeterminada por si no entra al bucle
- 
-            for page_number, page in enumerate(pdf.pages, start=1):
+        with pdfplumber.open(pdf_path, password=password) as pdf:
+            cardholder = ""
+            card_number = ""
+            has_transactions = False
+            last_page = 1
+
+            for page_num, page in enumerate(pdf.pages, start=1):
                 text = page.extract_text()
                 if not text:
                     continue
- 
-                last_page_number = page_number  # actualizar número de página
+
+                last_page = page_num
                 lines = text.split("\n")
- 
+
                 for idx, line in enumerate(lines):
                     line = line.strip()
- 
-                    # Buscar cambio de tarjeta y nombre
-                    tarjeta_match = pattern_tarjeta.search(line)
-                    if tarjeta_match:
-                        if tarjetahabiente and tarjeta and not tiene_transacciones:
-                            row = [pdf_file, tarjetahabiente, tarjeta, "Sin transacciones", "", "", "", "", "", "", "", "", last_page_number]
+
+                    # Check for card number change
+                    card_match = CARD_PATTERN.search(line)
+                    if card_match:
+                        if cardholder and card_number and not has_transactions:
+                            row = [
+                                os.path.basename(pdf_path), cardholder, card_number,
+                                "Sin transacciones", "", "", "", "", "", "", "", "", last_page
+                            ]
                             data_rows.append(row)
- 
-                        tarjeta = tarjeta_match.group(1)
-                        tiene_transacciones = False
- 
-                        # Capturar nombre desde la línea anterior
+
+                        card_number = card_match.group(1)
+                        has_transactions = False
+
+                        # Get cardholder name from previous line
                         if idx > 0:
-                            posible_nombre = lines[idx - 1].strip()
-                            posible_nombre = (
-                                posible_nombre
+                            possible_name = lines[idx - 1].strip()
+                            possible_name = (
+                                possible_name
                                 .replace("SEÑOR (A):", "")
                                 .replace("Señor (A):", "")
                                 .replace("SEÑOR:", "")
@@ -2969,43 +3039,99 @@ for pdf_file in pdf_files:
                                 .strip()
                                 .title()
                             )
-                            if len(posible_nombre.split()) >= 2:
-                                tarjetahabiente = posible_nombre
+                            if len(possible_name.split()) >= 2:
+                                cardholder = possible_name
                         continue
- 
-                    # Buscar transacción
-                    match = pattern_transaccion.search(' '.join(line.split()))
-                    if match and tarjetahabiente and tarjeta:
+
+                    # Check for transactions
+                    match = TRANSACTION_PATTERN.search(' '.join(line.split()))
+                    if match and cardholder and card_number:
                         row_data = list(match.groups())
-                        row_data.insert(0, tarjeta)
-                        row_data.insert(0, tarjetahabiente)
-                        row_data.insert(0, pdf_file)
- 
-                        # Ajustar valores numéricos
-                        row_data[6] = row_data[6].replace(".", "#").replace(",", ".").replace("#", ",")
-                        row_data[9] = row_data[9].replace(".", "#").replace(",", ".").replace("#", ",")
-                        row_data[10] = row_data[10].replace(".", "#").replace(",", ".").replace("#", ",")
- 
-                        row_data.append(page_number)  # Añadir número de página
+                        row_data.insert(0, card_number)
+                        row_data.insert(0, cardholder)
+                        row_data.insert(0, os.path.basename(pdf_path))
+
+                        # Clean numeric values
+                        row_data[6] = clean_value(row_data[6])
+                        row_data[9] = clean_value(row_data[9])
+                        row_data[10] = clean_value(row_data[10])
+
+                        row_data.append(page_num)
                         data_rows.append(row_data)
-                        tiene_transacciones = True
- 
-            # Al final del PDF, si no se registraron transacciones
-            if tarjetahabiente and tarjeta and not tiene_transacciones:
-                row = [pdf_file, tarjetahabiente, tarjeta, "Sin transacciones", "", "", "", "", "", "", "", "", last_page_number]
+                        has_transactions = True
+
+            # Add entry if no transactions were found
+            if cardholder and card_number and not has_transactions:
+                row = [
+                    os.path.basename(pdf_path), cardholder, card_number,
+                    "Sin transacciones", "", "", "", "", "", "", "", "", last_page
+                ]
                 data_rows.append(row)
- 
+
     except Exception as e:
-        print(f"⚠️ Error al procesar '{pdf_file}': {e}")
- 
-# Exportar a Excel
-if data_rows:
-    df_final = pd.DataFrame(data_rows, columns=column_names)
-    df_final.to_excel(output_excel, index=False)
-    print(f"\n✅ Archivo generado: {output_excel}")
-    print(df_final.head())
-else:
-    print("\n⚠️ No se extrajo ningún dato.")
+        print(f"⚠ Error processing '{os.path.basename(pdf_path)}': {e}")
+
+    return data_rows
+
+def cleanup_files():
+    """Clean up temporary files"""
+    try:
+        # Delete all PDFs in the folder
+        for filename in os.listdir(PDF_FOLDER):
+            if filename.lower().endswith('.pdf'):
+                os.remove(os.path.join(PDF_FOLDER, filename))
+        
+        # Delete password file if exists
+        password_file = os.path.join(PDF_FOLDER, "password.txt")
+        if os.path.exists(password_file):
+            os.remove(password_file)
+            
+        print("✓ Temporary files cleaned up")
+    except Exception as e:
+        print(f"⚠ Warning: Could not clean all files: {e}")
+
+def main():
+    """Main processing function"""
+    # Ensure directories exist
+    os.makedirs(PDF_FOLDER, exist_ok=True)
+    
+    # Get password
+    password = get_password()
+    
+    # Get PDF files
+    pdf_files = [
+        f for f in os.listdir(PDF_FOLDER) 
+        if f.lower().endswith(".pdf") and os.path.isfile(os.path.join(PDF_FOLDER, f))
+    ]
+    
+    if not pdf_files:
+        print("⚠ No PDF files found in the visa folder")
+        return
+    
+    # Process all PDFs
+    all_data = []
+    for pdf_file in pdf_files:
+        pdf_path = os.path.join(PDF_FOLDER, pdf_file)
+        print(f"📄 Processing: {pdf_file}")
+        all_data.extend(process_pdf(pdf_path, password))
+    
+    # Export to Excel
+    if all_data:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = os.path.join(PDF_FOLDER, f"VISA_{timestamp}.xlsx")
+        
+        df = pd.DataFrame(all_data, columns=COLUMN_NAMES)
+        df.to_excel(output_file, index=False)
+        print(f"\n✓ Excel file generated: {output_file}")
+        print(df.head())
+        
+        # Clean up files
+        cleanup_files()
+    else:
+        print("\n⚠ No data extracted from PDFs")
+
+if __name__ == "__main__":
+    main()
 "@
 
 # Create custom admin base template
@@ -3896,7 +4022,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </form>
     <form method="post" action="{% url 'logout' %}" class="d-inline">
         {% csrf_token %}
-        <button type="submit" class="btn btn-custom-primary" title="Cerrar sesión">
+        <button type="submit" class="btn btn-custom-primary" title="Cerrar sesiÃ³n">
             <i class="fas fa-sign-out-alt"></i>
         </button>
     </form>
@@ -4022,44 +4148,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     </form>
                 </div>
 
-                <!-- Mastercard -->
-                <div class="mb-4 flex-grow-1">
-                    <form method="post" enctype="multipart/form-data" action="{% url 'import_mastercard_pdf' %}">
-                        {% csrf_token %}
-                        <div class="mb-3">
-                            <input type="file" class="form-control" id="mastercard_pdf_file" name="mastercard_pdf_file" accept=".pdf" required>
-                            <div class="form-text">Subir archivos PDF de extractos Mastercard</div>
-                            <div class="mb-3">
-                                <input type="password" class="form-control" id="pdf_password" name="pdf_password">
-                                <div class="form-text">Ingrese la contrasena</div>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Mastercard</button>
-                    </form>
-                </div>
-
                 <!-- Visa -->
                 <div class="flex-grow-1">
-                    <form method="post" enctype="multipart/form-data" action="{% url 'import_visa_pdf' %}">
+                    <form method="post" enctype="multipart/form-data" action="{% url 'import_visa_pdfs' %}">
                         {% csrf_token %}
                         <div class="mb-3">
-                            <input type="file" class="form-control" id="visa_pdf_file" name="visa_pdf_file" accept=".pdf" required>
-                            <div class="form-text">Subir archivos PDF de extractos Visa</div>
-                            <div class="mb-3">
-                                <input type="password" class="form-control" id="pdf_password" name="pdf_password">
-                                <div class="form-text">Ingrese la contrasena</div>
-                            </div>
+                            <input type="file" class="form-control" id="visa_pdf_files" name="visa_pdf_files" multiple webkitdirectory directory required>
+                            <div class="form-text">Seleccione la carpeta con los PDFs de VISA</div>
                         </div>
-                        <button type="submit" class="btn btn-custom-primary btn-lg text-start">Importar Visa</button>
+                        <!-- Add password input field -->
+                        <div class="mb-3">
+                            <input type="password" class="form-control" id="visa_pdf_password" name="visa_pdf_password" placeholder="Clave">
+                            <div class="form-text">Ingrese la contraseña si los PDFs están protegidos</div>
+                        </div>
+                        <button type="submit" class="btn btn-custom-primary btn-lg text-start">Procesar VISA</button>
                     </form>
                 </div>
             </div>
             
             <!-- Messages for all three forms -->
             {% for message in messages %}
-                {% if 'import_protected_excel' in message.tags or 'import_mastercard_pdf' in message.tags or 'import_visa_pdf' in message.tags %}
+                {% if 'import_protected_excel' in message.tags or 'import_visa_pdfs' in message.tags %}
                 <div class="card-footer">
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">      
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-0">
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
@@ -5208,8 +5319,8 @@ document.addEventListener('DOMContentLoaded', function() {
 @"
 {% extends "master.html" %}
 
-{% block title %}Tarjetas{% endblock %}
-{% block navbar_title %}Tarjetas{% endblock %}
+{% block title %}Tarjetas de Crédito{% endblock %}
+{% block navbar_title %}Tarjetas de Crédito{% endblock %}
 
 {% block navbar_buttons %}
 <div>
@@ -5225,10 +5336,10 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="/alerts/" class="btn btn-custom-primary">
         <i class="fas fa-bell" style="color: red;"></i>
     </a>
-    <a href="/persons/import/" class="btn btn-custom-primary">
+    <a href="/persons/import/" class="btn btn-custom-primary" title="Importar">
         <i class="fas fa-upload"></i>
     </a>
-    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green">
+    <a href="?{% for key, value in request.GET.items %}{{ key }}={{ value }}&{% endfor %}export=excel" class="btn btn-custom-primary btn-my-green" title="Exportar">
         <i class="fas fa-file-excel"></i>
     </a>
     <form method="post" action="{% url 'logout' %}" class="d-inline">
@@ -5245,226 +5356,172 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="card mb-4 border-0 shadow" style="background-color:rgb(224, 224, 224);">
     <div class="card-body">
         <form method="get" action="." class="row g-3 align-items-center">
-            <!-- General Search -->
+            <!-- General Search 
             <div class="col-md-4">
                 <input type="text" 
                        name="q" 
                        class="form-control form-control-lg" 
-                       placeholder="Buscar transacciones..." 
+                       placeholder="Buscar tarjetahabiente..." 
                        value="{{ request.GET.q }}">
-            </div>
+            </div> -->
             
-            <!-- Card Type Filter 
-            <div class="col-md-2">
+            <!-- Card Type Filter -->
+            <div class="col-md-3">
                 <select name="card_type" class="form-select form-select-lg">
-                    <option value="">Todas</option>
+                    <option value="">Tipo</option>
                     <option value="MC" {% if request.GET.card_type == 'MC' %}selected{% endif %}>Mastercard</option>
                     <option value="VI" {% if request.GET.card_type == 'VI' %}selected{% endif %}>Visa</option>
                 </select>
-            </div> -->
+            </div>
             
             <!-- Date Range -->
             <div class="col-md-3">
-                <input type="date" name="date_from" class="form-control form-control-lg" 
-                       value="{{ request.GET.date_from }}" placeholder="Desde">
+                <input type="date" 
+                       name="date_from" 
+                       class="form-control form-control-lg" 
+                       value="{{ request.GET.date_from }}">
             </div>
             <div class="col-md-3">
-                <input type="date" name="date_to" class="form-control form-control-lg" 
-                       value="{{ request.GET.date_to }}" placeholder="Hasta">
+                <input type="date" 
+                       name="date_to" 
+                       class="form-control form-control-lg" 
+                       value="{{ request.GET.date_to }}">
             </div>
             
             <!-- Submit Buttons -->
             <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-custom-primary btn-lg flex-grow-1">
-                    <i class="fas fa-filter"></i>
-                </button>
-                <a href="." class="btn btn-custom-primary btn-lg flex-grow-1">
-                    <i class="fas fa-undo"></i>
-                </a>
+                <button type="submit" class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-filter"></i></button>
+                <a href="." class="btn btn-custom-primary btn-lg flex-grow-1"><i class="fas fa-undo"></i></a>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Mastercard Table -->
-<div class="card mb-4 border-0 shadow">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Mastercard</h5>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive table-container">
-            <table class="table table-striped table-hover mb-0">
-                <thead class="table-fixed-header">
-                    <tr>
-                        <th>Tarjetahabiente</th>
-                        <th>Numero</th>
-                        <th>Fecha</th>
-                        <th>Descripcion</th>
-                        <th>Valor</th>
-                        <th>Archivo</th>
-                        <th class="table-fixed-column">Ver</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for card in mc_page_obj %}
-                    <tr>
-                        <td>
-                            <a href="/persons/details/{{ card.person.cedula }}/">
-                                {{ card.person.nombre_completo }}
-                            </a>
-                        </td>
-                        <td>**** **** **** {{ card.card_number|slice:"-4:" }}</td>
-                        <td>{{ card.transaction_date|date:"Y-m-d" }}</td>
-                        <td>{{ card.description|truncatechars:50 }}</td>
-                        <td>`$`{{ card.original_value|floatformat:2 }}</td>
-                        <td>{{ card.source_file|truncatechars:20 }}</td>
-                        <td class="table-fixed-column">
-                            <a href="#" class="btn btn-custom-primary btn-sm" 
-                               data-bs-toggle="modal" data-bs-target="#cardModal{{ card.id }}">
-                                <i class="bi bi-eye-fill"></i>
-                            </a>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="7" class="text-center py-4">
-                            No hay transacciones de Mastercard
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
-        <!-- Pagination -->
-        {% if mc_page_obj.has_other_pages %}
-        <div class="p-3">
-            <nav aria-label="Page navigation">
-                <ul class="pagination justify-content-center">
-                    {% if mc_page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?mc_page=1{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
-                                <span aria-hidden="true">&laquo;&laquo;</span>
-                            </a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?mc_page={{ mc_page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
-                                <span aria-hidden="true">&laquo;</span>
-                            </a>
-                        </li>
-                    {% endif %}
-                    
-                    {% for num in mc_page_obj.paginator.page_range %}
-                        {% if mc_page_obj.number == num %}
-                            <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
-                        {% elif num > mc_page_obj.number|add:'-3' and num < mc_page_obj.number|add:'3' %}
-                            <li class="page-item"><a class="page-link" href="?mc_page={{ num }}{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
-                        {% endif %}
-                    {% endfor %}
-                    
-                    {% if mc_page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?mc_page={{ mc_page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
-                                <span aria-hidden="true">&raquo;</span>
-                            </a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?mc_page={{ mc_page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'mc_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
-                                <span aria-hidden="true">&raquo;&raquo;</span>
-                            </a>
-                        </li>
-                    {% endif %}
-                </ul>
-            </nav>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Visa Table -->
+<!-- Cards Table -->
 <div class="card border-0 shadow">
-    <div class="card-header bg-success text-white">
-        <h5 class="mb-0">Visa</h5>
-    </div>
     <div class="card-body p-0">
         <div class="table-responsive table-container">
             <table class="table table-striped table-hover mb-0">
                 <thead class="table-fixed-header">
                     <tr>
-                        <th>Tarjetahabiente</th>
-                        <th>Numero</th>
-                        <th>Fecha</th>
-                        <th>Descripcion</th>
-                        <th>Valor</th>
-                        <th>Archivo</th>
-                        <th class="table-fixed-column">Ver</th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=person__nombre_completo&sort_direction={% if current_order == 'person__nombre_completo' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Tarjetahabiente
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=card_type&sort_direction={% if current_order == 'card_type' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Tipo
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=card_number&sort_direction={% if current_order == 'card_number' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Número
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=transaction_date&sort_direction={% if current_order == 'transaction_date' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Fecha
+                            </a>
+                        </th>
+                        <th style="color: rgb(0, 0, 0);">Descripción</th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=original_value&sort_direction={% if current_order == 'original_value' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Valor Original
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=exchange_rate&sort_direction={% if current_order == 'exchange_rate' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Tasa
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=charges&sort_direction={% if current_order == 'charges' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Cargos
+                            </a>
+                        </th>
+                        <th>
+                            <a href="?{% for key, value in all_params.items %}{{ key }}={{ value }}&{% endfor %}order_by=balance&sort_direction={% if current_order == 'balance' and current_direction == 'asc' %}desc{% else %}asc{% endif %}" style="text-decoration: none; color: rgb(0, 0, 0);">
+                                Saldo
+                            </a>
+                        </th>
+                        <th style="color: rgb(0, 0, 0);">Cuotas</th>
+                        <th style="color: rgb(0, 0, 0);">Archivo</th>
+                        <th class="table-fixed-column" style="color: rgb(0, 0, 0);">Ver</th>
                     </tr>
                 </thead>
+                <!-- In your table body -->
                 <tbody>
-                    {% for card in visa_page_obj %}
-                    <tr>
-                        <td>
-                            <a href="/persons/details/{{ card.person.cedula }}/">
-                                {{ card.person.nombre_completo }}
-                            </a>
-                        </td>
+                    {% for card in page_obj.object_list %}  <!-- Changed from cards to page_obj.object_list -->
+                    <tr {% if card.person.revisar %}class="table-warning"{% endif %}>
+                        <td>{{ card.person.nombre_completo }}</td>
+                        <td>{{ card.get_card_type_display }}</td>
                         <td>**** **** **** {{ card.card_number|slice:"-4:" }}</td>
-                        <td>{{ card.transaction_date|date:"Y-m-d" }}</td>
-                        <td>{{ card.description|truncatechars:50 }}</td>
+                        <td>{{ card.transaction_date|date:"d/m/Y" }}</td>
+                        <td>{{ card.description|truncatechars:30 }}</td>
                         <td>`$`{{ card.original_value|floatformat:2 }}</td>
-                        <td>{{ card.source_file|truncatechars:20 }}</td>
+                        <td>{{ card.exchange_rate|default_if_none:"-"|floatformat:4 }}</td>
+                        <td>`$`{{ card.charges|default_if_none:"-"|floatformat:2 }}</td>
+                        <td>`$`{{ card.balance|default_if_none:"-"|floatformat:2 }}</td>
+                        <td>{{ card.installments|default:"-" }}</td>
+                        <td>{{ card.source_file|truncatechars:15 }}</td>
                         <td class="table-fixed-column">
-                            <a href="#" class="btn btn-custom-primary btn-sm" 
-                               data-bs-toggle="modal" data-bs-target="#cardModal{{ card.id }}">
-                                <i class="bi bi-eye-fill"></i>
+                            <a href="/persons/details/{{ card.person.cedula }}/" 
+                            class="btn btn-custom-primary btn-sm"
+                            title="Ver detalles">
+                                <i class="bi bi-person-vcard-fill"></i>
                             </a>
                         </td>
                     </tr>
                     {% empty %}
-                    <tr>
-                        <td colspan="7" class="text-center py-4">
-                            No hay transacciones de Visa
-                        </td>
-                    </tr>
+                        <tr>
+                            <td colspan="12" class="text-center py-4">
+                                {% if request.GET.q or request.GET.card_type or request.GET.date_from or request.GET.date_to %}
+                                    No se encontraron transacciones con los filtros aplicados.
+                                {% else %}
+                                    No hay transacciones de tarjetas registradas.
+                                {% endif %}
+                            </td>
+                        </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         
         <!-- Pagination -->
-        {% if visa_page_obj.has_other_pages %}
+        {% if page_obj.has_other_pages %}
         <div class="p-3">
             <nav aria-label="Page navigation">
                 <ul class="pagination justify-content-center">
-                    {% if visa_page_obj.has_previous %}
+                    {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?visa_page=1{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
+                            <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="First">
                                 <span aria-hidden="true">&laquo;&laquo;</span>
                             </a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?visa_page={{ visa_page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Previous">
                                 <span aria-hidden="true">&laquo;</span>
                             </a>
                         </li>
                     {% endif %}
                     
-                    {% for num in visa_page_obj.paginator.page_range %}
-                        {% if visa_page_obj.number == num %}
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
                             <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
-                        {% elif num > visa_page_obj.number|add:'-3' and num < visa_page_obj.number|add:'3' %}
-                            <li class="page-item"><a class="page-link" href="?visa_page={{ num }}{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
                         {% endif %}
                     {% endfor %}
                     
-                    {% if visa_page_obj.has_next %}
+                    {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?visa_page={{ visa_page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Next">
                                 <span aria-hidden="true">&raquo;</span>
                             </a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?visa_page={{ visa_page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'visa_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" aria-label="Last">
                                 <span aria-hidden="true">&raquo;&raquo;</span>
                             </a>
                         </li>
@@ -5475,127 +5532,6 @@ document.addEventListener('DOMContentLoaded', function() {
         {% endif %}
     </div>
 </div>
-
-<!-- Card Detail Modals -->
-{% for card in mc_page_obj %}
-<div class="modal fade" id="cardModal{{ card.id }}" tabindex="-1" aria-labelledby="cardModalLabel{{ card.id }}" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="cardModalLabel{{ card.id }}">
-                    Detalles de Transacción
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <strong>Tarjetahabiente:</strong>
-                        <p>{{ card.person.nombre_completo }}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Numero de Tarjeta:</strong>
-                        <p>**** **** **** {{ card.card_number|slice:"-4:" }}</p>
-                    </div>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <strong>Fecha:</strong>
-                        <p>{{ card.transaction_date|date:"Y-m-d" }}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Valor:</strong>
-                        <p>`$`{{ card.original_value|floatformat:2 }}</p>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <strong>Descripcion:</strong>
-                    <p>{{ card.description }}</p>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <strong>Archivo:</strong>
-                        <p>{{ card.source_file }}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Página:</strong>
-                        <p>{{ card.page_number }}</p>
-                    </div>
-                </div>
-                {% if card.installments %}
-                <div class="mb-3">
-                    <strong>Cuotas:</strong>
-                    <p>{{ card.installments }}</p>
-                </div>
-                {% endif %}
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-            </div>
-        </div>
-    </div>
-</div>
-{% endfor %}
-
-{% for card in visa_page_obj %}
-<div class="modal fade" id="cardModal{{ card.id }}" tabindex="-1" aria-labelledby="cardModalLabel{{ card.id }}" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="cardModalLabel{{ card.id }}">
-                    Detalles de Transacción
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <strong>Tarjetahabiente:</strong>
-                        <p>{{ card.person.nombre_completo }}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Numero de Tarjeta:</strong>
-                        <p>**** **** **** {{ card.card_number|slice:"-4:" }}</p>
-                    </div>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <strong>Fecha:</strong>
-                        <p>{{ card.transaction_date|date:"Y-m-d" }}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Valor:</strong>
-                        <p>`$`{{ card.original_value|floatformat:2 }}</p>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <strong>Descripcion:</strong>
-                    <p>{{ card.description }}</p>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <strong>Archivo:</strong>
-                        <p>{{ card.source_file }}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <strong>Página:</strong>
-                        <p>{{ card.page_number }}</p>
-                    </div>
-                </div>
-                {% if card.installments %}
-                <div class="mb-3">
-                    <strong>Cuotas:</strong>
-                    <p>{{ card.installments }}</p>
-                </div>
-                {% endif %}
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-            </div>
-        </div>
-    </div>
-</div>
-{% endfor %}
 {% endblock %}
 "@ | Out-File -FilePath "core/templates/cards.html" -Encoding utf8
 
