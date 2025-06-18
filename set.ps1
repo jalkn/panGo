@@ -414,7 +414,7 @@ def _get_dropdown_values():
     }
 
 def process_financial_data():
-    """Process financial data from inTrends.xlsx and update FinancialReport model"""
+    """Process financial data from inTrends.xlsx and update FinancialReport model using bulk operations"""
     try:
         in_trends_path = "core/src/inTrends.xlsx"
         
@@ -422,85 +422,108 @@ def process_financial_data():
             print("inTrends.xlsx file not found")
             return False
             
+        # Read the Excel file in one go
         df = pd.read_excel(in_trends_path)
         
         # Ensure Cedula is string type for comparison
         df['Cedula'] = df['Cedula'].astype(str)
         
+        # Get all existing cedulas in one query
+        existing_cedulas = set(Person.objects.filter(cedula__in=df['Cedula'].unique()))
+        
+        # Pre-create a mapping of cedula to person for faster lookup
+        cedula_to_person = {p.cedula: p for p in existing_cedulas}
+        
+        # Prepare batch containers
+        financial_reports = []
+        batch_size = 1000  # Adjust based on your database and memory constraints
+        created_count = 0
+        
         def safe_convert(value):
             """Convert a value to decimal, handling special cases"""
+            if pd.isna(value) or pd.isnull(value):
+                return None
             try:
-                # Handle numpy/pandas special values
-                if pd.isna(value) or pd.isnull(value):
-                    return None
-                if str(value).lower() in ['-inf', 'inf', 'infinity', '-infinity']:
-                    return None
-                if str(value).lower() == 'nan':
-                    return None
-                # Convert to float first to handle scientific notation, then to Decimal
+                if isinstance(value, str):
+                    value = value.replace('.', '').replace(',', '.')
                 return float(value)
             except (ValueError, TypeError):
                 return None
         
+        # Process all rows and prepare objects
         for _, row in df.iterrows():
             try:
-                # Find the person by cedula
-                person = Person.objects.filter(cedula=str(row['Cedula'])).first()
+                cedula = str(row['Cedula'])
+                person = cedula_to_person.get(cedula)
                 if not person:
                     continue
                     
-                # Create or update financial report with proper value handling
-                FinancialReport.objects.update_or_create(
+                # Create FinancialReport instance (not saved yet)
+                financial_reports.append(FinancialReport(
                     person=person,
                     fkIdPeriodo=row.get('fkIdPeriodo'),
-                    defaults={
-                        'ano_declaracion': row.get('Año Declaración'),
-                        'año_creacion': row.get('Año Creación'),
-                        'activos': safe_convert(row.get('Activos')),
-                        'cant_bienes': safe_convert(row.get('Cant_Bienes')),
-                        'cant_bancos': safe_convert(row.get('Cant_Bancos')),
-                        'cant_cuentas': safe_convert(row.get('Cant_Cuentas')),
-                        'cant_inversiones': safe_convert(row.get('Cant_Inversiones')),
-                        'pasivos': safe_convert(row.get('Pasivos')),
-                        'cant_deudas': safe_convert(row.get('Cant_Deudas')),
-                        'patrimonio': safe_convert(row.get('Patrimonio')),
-                        'apalancamiento': safe_convert(row.get('Apalancamiento')),
-                        'endeudamiento': safe_convert(row.get('Endeudamiento')),
-                        'aum_pat_subito': row.get('Aum. Pat. Subito'),
-                        'activos_var_abs': row.get('Activos Var. Abs.'),
-                        'activos_var_rel': row.get('Activos Var. Rel.'),
-                        'pasivos_var_abs': row.get('Pasivos Var. Abs.'),
-                        'pasivos_var_rel': row.get('Pasivos Var. Rel.'),
-                        'patrimonio_var_abs': row.get('Patrimonio Var. Abs.'),
-                        'patrimonio_var_rel': row.get('Patrimonio Var. Rel.'),
-                        'apalancamiento_var_abs': row.get('Apalancamiento Var. Abs.'),
-                        'apalancamiento_var_rel': row.get('Apalancamiento Var. Rel.'),
-                        'endeudamiento_var_abs': row.get('Endeudamiento Var. Abs.'),
-                        'endeudamiento_var_rel': row.get('Endeudamiento Var. Rel.'),
-                        'banco_saldo': safe_convert(row.get('BancoSaldo')),
-                        'bienes': safe_convert(row.get('Bienes')),
-                        'inversiones': safe_convert(row.get('Inversiones')),
-                        'banco_saldo_var_abs': row.get('BancoSaldo Var. Abs.'),
-                        'banco_saldo_var_rel': row.get('BancoSaldo Var. Rel.'),
-                        'bienes_var_abs': row.get('Bienes Var. Abs.'),
-                        'bienes_var_rel': row.get('Bienes Var. Rel.'),
-                        'inversiones_var_abs': row.get('Inversiones Var. Abs.'),
-                        'inversiones_var_rel': row.get('Inversiones Var. Rel.'),
-                        'ingresos': safe_convert(row.get('Ingresos')),
-                        'cant_ingresos': safe_convert(row.get('Cant_Ingresos')),
-                        'ingresos_var_abs': row.get('Ingresos Var. Abs.'),
-                        'ingresos_var_rel': row.get('Ingresos Var. Rel.'),
-                        'capital': safe_convert(row.get('Capital')),
-                    }
-                )
+                    ano_declaracion=row.get('Año Declaración'),
+                    año_creacion=row.get('Año Creación'),
+                    activos=safe_convert(row.get('Activos')),
+                    cant_bienes=safe_convert(row.get('Cant_Bienes')),
+                    cant_bancos=safe_convert(row.get('Cant_Bancos')),
+                    cant_cuentas=safe_convert(row.get('Cant_Cuentas')),
+                    cant_inversiones=safe_convert(row.get('Cant_Inversiones')),
+                    pasivos=safe_convert(row.get('Pasivos')),
+                    cant_deudas=safe_convert(row.get('Cant_Deudas')),
+                    patrimonio=safe_convert(row.get('Patrimonio')),
+                    apalancamiento=safe_convert(row.get('Apalancamiento')),
+                    endeudamiento=safe_convert(row.get('Endeudamiento')),
+                    aum_pat_subito=row.get('Aum. Pat. Subito'),
+                    activos_var_abs=row.get('Activos Var. Abs.'),
+                    activos_var_rel=row.get('Activos Var. Rel.'),
+                    pasivos_var_abs=row.get('Pasivos Var. Abs.'),
+                    pasivos_var_rel=row.get('Pasivos Var. Rel.'),
+                    patrimonio_var_abs=row.get('Patrimonio Var. Abs.'),
+                    patrimonio_var_rel=row.get('Patrimonio Var. Rel.'),
+                    apalancamiento_var_abs=row.get('Apalancamiento Var. Abs.'),
+                    apalancamiento_var_rel=row.get('Apalancamiento Var. Rel.'),
+                    endeudamiento_var_abs=row.get('Endeudamiento Var. Abs.'),
+                    endeudamiento_var_rel=row.get('Endeudamiento Var. Rel.'),
+                    banco_saldo=safe_convert(row.get('BancoSaldo')),
+                    bienes=safe_convert(row.get('Bienes')),
+                    inversiones=safe_convert(row.get('Inversiones')),
+                    banco_saldo_var_abs=row.get('BancoSaldo Var. Abs.'),
+                    banco_saldo_var_rel=row.get('BancoSaldo Var. Rel.'),
+                    bienes_var_abs=row.get('Bienes Var. Abs.'),
+                    bienes_var_rel=row.get('Bienes Var. Rel.'),
+                    inversiones_var_abs=row.get('Inversiones Var. Abs.'),
+                    inversiones_var_rel=row.get('Inversiones Var. Rel.'),
+                    ingresos=safe_convert(row.get('Ingresos')),
+                    cant_ingresos=safe_convert(row.get('Cant_Ingresos')),
+                    ingresos_var_abs=row.get('Ingresos Var. Abs.'),
+                    ingresos_var_rel=row.get('Ingresos Var. Rel.'),
+                    capital=safe_convert(row.get('Capital'))
+                ))
+                
+                # Batch processing
+                if len(financial_reports) >= batch_size:
+                    FinancialReport.objects.bulk_create(financial_reports, batch_size=batch_size)
+                    created_count += len(financial_reports)
+                    financial_reports = []
+                    print(f"Processed {created_count} records...")
+                    
             except Exception as e:
                 print(f"Error processing row for cedula {row['Cedula']}: {str(e)}")
                 continue
                 
+        # Process remaining records
+        if financial_reports:
+            FinancialReport.objects.bulk_create(financial_reports)
+            created_count += len(financial_reports)
+            
+        print(f"Successfully processed {created_count} financial reports")
         return True
         
     except Exception as e:
         print(f"Error processing financial data: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -774,160 +797,144 @@ def process_persons_data(request):
 def import_protected_excel(request):
     """
     View for importing data from password-protected Excel files
-    and running the full analysis pipeline
+    and running the full analysis pipeline (optimized version without JSON output)
     """
-    if request.method == 'POST' and request.FILES.get('protected_excel_file'):
-        excel_file = request.FILES['protected_excel_file']
-        password = request.POST.get('excel_password', '')
+    if not (request.method == 'POST' and request.FILES.get('protected_excel_file')):
+        return HttpResponseRedirect('/persons/import/')
+
+    excel_file = request.FILES['protected_excel_file']
+    password = request.POST.get('excel_password', '')
+    
+    try:
+        # Create necessary directories if they don't exist
+        os.makedirs('core/src', exist_ok=True)
         
+        # 1. Save the uploaded file temporarily
+        temp_path = "core/src/dataHistoricaPBI.xlsx"
+        with open(temp_path, 'wb+') as destination:
+            for chunk in excel_file.chunks():
+                destination.write(chunk)
+        
+        # 2. Process the file to remove password
+        output_excel = "core/src/data.xlsx"
+        
+        # Password removal function
+        def remove_excel_password_browser(input_file, output_file, password):
+            try:
+                import msoffcrypto
+                with open(input_file, "rb") as file:
+                    office_file = msoffcrypto.OfficeFile(file)
+                    if office_file.is_encrypted():
+                        if not password:
+                            return False, "No password provided"
+                        try:
+                            office_file.load_key(password=password)
+                        except Exception as e:
+                            return False, "Incorrect password"
+                    else:
+                        office_file.load_key(password=None)
+                    
+                    with open(output_file, "wb") as decrypted:
+                        office_file.decrypt(decrypted)
+                return True, "File processed successfully"
+            except Exception as e:
+                return False, str(e)
+        
+        # Remove password and create data.xlsx
+        success, message = remove_excel_password_browser(temp_path, output_excel, password)
+        
+        if not success:
+            messages.error(request, f'Error al procesar el archivo protegido: {message}')
+            return HttpResponseRedirect('/persons/import/')
+        
+        # 3. Add fkIdEstado (removed JSON output part)
+        from core.passKey import add_fk_id_estado
+        add_fk_id_estado(output_excel)  # Modified to not require output_json parameter
+        
+        # 4. Run the full analysis pipeline
         try:
-            # Create necessary directories if they don't exist
-            os.makedirs('core/src', exist_ok=True)
+            # Import the analysis modules
+            from core.cats import run_all_analyses as run_cats_analysis
+            from core.nets import run_all_analyses as run_nets_analysis
+            from core.trends import main as run_trends_analysis
+            from core.idTrends import merge_trends_data
+            from core.inTrends import merge_conflicts_data
             
-            # 1. Save the uploaded file temporarily
-            temp_path = "core/src/dataHistoricaPBI.xlsx"
-            with open(temp_path, 'wb+') as destination:
-                for chunk in excel_file.chunks():
-                    destination.write(chunk)
-            
-            # 2. Process the file using passKey.py functionality
-            from core.passKey import remove_excel_password, add_fk_id_estado
-            
-            output_excel = "core/src/data.xlsx"
-            output_json = "core/src/fk1data.json"
-            
-            # Modified password removal function that works with the view
-            def remove_excel_password_browser(input_file, output_file, password):
-                try:
-                    import msoffcrypto
-                    with open(input_file, "rb") as file:
-                        office_file = msoffcrypto.OfficeFile(file)
-                        if office_file.is_encrypted():
-                            if not password:
-                                return False, "No password provided"
-                            try:
-                                office_file.load_key(password=password)
-                            except Exception as e:
-                                return False, "Incorrect password"
-                        else:
-                            office_file.load_key(password=None)
-                        
-                        with open(output_file, "wb") as decrypted:
-                            office_file.decrypt(decrypted)
-                    return True, "File processed successfully"
-                except Exception as e:
-                    return False, str(e)
-            
-            # Remove password and create data.xlsx
-            success, message = remove_excel_password_browser(temp_path, output_excel, password)
-            
-            if not success:
-                messages.error(request, f'Error al procesar el archivo protegido: {message}')
+            # Check for required periodo file
+            periodo_file = "core/src/periodoBR.xlsx"
+            if not os.path.exists(periodo_file):
+                messages.error(request, 'El archivo de periodos (periodoBR.xlsx) no existe. Por favor cargue primero el archivo de periodos.')
                 return HttpResponseRedirect('/persons/import/')
             
-            # 3. Add fkIdEstado and create JSON
-            json_success = add_fk_id_estado(output_excel, output_json)
+            # Run analysis steps
+            run_cats_analysis()
+            run_nets_analysis()
+            run_trends_analysis()
             
-            if not json_success:
-                messages.warning(request, 'Archivo desencriptado pero falló la generación del JSON')
+            # Process idTrends data
+            idtrends_file = "core/src/idTrends.xlsx"
+            if os.path.exists(idtrends_file):
+                df_idtrends = pd.read_excel(idtrends_file)
+                
+                for _, row in df_idtrends.iterrows():
+                    if pd.notna(row['Cedula']):
+                        Person.objects.update_or_create(
+                            cedula=row['Cedula'],
+                            defaults={
+                                'nombre_completo': row.get('Nombre', ''),
+                                'cargo': row.get('Cargo', ''),
+                                'correo': row.get('Correo', ''),
+                                'compania': row.get('Compania', ''),
+                                'estado': row.get('Estado', 'Activo'),
+                                'revisar': False,
+                                'comments': '',
+                            }
+                        )
+                
+                messages.success(request, 'Datos de personas actualizados desde idTrends.xlsx')
             
-            # 4. Run the full analysis pipeline
-            try:
-                # Import the analysis modules
-                from core.cats import run_all_analyses as run_cats_analysis
-                from core.nets import run_all_analyses as run_nets_analysis
-                from core.trends import main as run_trends_analysis
-                from core.idTrends import merge_trends_data
-                from core.inTrends import merge_conflicts_data  # Add this import
-                
-                # Ensure periodoBR.xlsx exists
-                periodo_file = "core/src/periodoBR.xlsx"
-                if not os.path.exists(periodo_file):
-                    messages.error(request, 'El archivo de periodos (periodoBR.xlsx) no existe. Por favor cargue primero el archivo de periodos.')
-                    return HttpResponseRedirect('/persons/import/')
-                
-                # Run CATS analysis (generates banks.xlsx, debts.xlsx, etc.)
-                run_cats_analysis()
-                
-                # Run NETS analysis (generates bankNets.xlsx, debtNets.xlsx, etc.)
-                run_nets_analysis()
-                
-                # Run TRENDS analysis (generates trends.xlsx, overTrends.xlsx, data.json)
-                run_trends_analysis()
-                
-                # After running all analyses, now process the idTrends data
-                idtrends_file = "core/src/idTrends.xlsx"
-                if os.path.exists(idtrends_file):
-                    df_idtrends = pd.read_excel(idtrends_file)
-                    
-                    for _, row in df_idtrends.iterrows():
-                        if pd.notna(row['Cedula']):
-                            Person.objects.update_or_create(
-                                cedula=row['Cedula'],
-                                defaults={
-                                    'nombre_completo': row.get('Nombre', ''),
-                                    'cargo': row.get('Cargo', ''),
-                                    'correo': row.get('Correo', ''),
-                                    'compania': row.get('Compania', ''),
-                                    'estado': row.get('Estado', 'Activo'),
-                                    'revisar': False,
-                                    'comments': '',
-                                }
-                            )
-                    
-                    messages.success(request, 'Datos de personas actualizados desde idTrends.xlsx')
-                    
-                # Run idTrends analysis - merge trends.xlsx with Personas.xlsx
-                personas_file = "core/src/Personas.xlsx"
-                trends_file = "core/src/trends.xlsx"
-                idtrends_output = "core/src/idTrends.xlsx"
-                
-                if os.path.exists(personas_file) and os.path.exists(trends_file):
-                    merge_trends_data(
-                        personas_file=personas_file,
-                        trends_file=trends_file,
-                        output_file=idtrends_output
-                    )
-                    messages.success(request, 'Análisis completado: Datos de tendencias fusionados con personas.')
-                else:
-                    messages.warning(request, 'Análisis completado pero no se pudo fusionar tendencias con personas (archivos faltantes).')
-                
-                # NEW: Run inTrends analysis - merge idTrends.xlsx with conflicts.xlsx
-                conflicts_file = "core/src/conflicts.xlsx"
-                intrends_output = "core/src/inTrends.xlsx"
-                
-                if os.path.exists(idtrends_output) and os.path.exists(conflicts_file):
-                    merge_conflicts_data(
-                        idtrends_file=idtrends_output,
-                        conflicts_file=conflicts_file,
-                        output_file=intrends_output
-                    )
-                    messages.success(request, 'Análisis completado: Datos de conflictos fusionados con tendencias.')
-                else:
-                    messages.warning(request, 'Análisis completado pero no se pudo fusionar conflictos con tendencias (archivos faltantes).')
-                
-                messages.success(request, 'Proceso completo! Archivo desencriptado y análisis generados exitosamente.')
+            # Merge trends data
+            personas_file = "core/src/Personas.xlsx"
+            trends_file = "core/src/trends.xlsx"
+            idtrends_output = "core/src/idTrends.xlsx"
             
-            except Exception as e:
-                messages.error(request, f'Error durante el análisis de datos: {str(e)}')
+            if os.path.exists(personas_file) and os.path.exists(trends_file):
+                merge_trends_data(
+                    personas_file=personas_file,
+                    trends_file=trends_file,
+                    output_file=idtrends_output
+                )
+                messages.success(request, 'Análisis completado: Datos de tendencias fusionados con personas.')
             
-            # Clean up temporary files
-            try:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                if os.path.exists(output_excel):  # Delete data.xlsx after analysis
-                    os.remove(output_excel)
-            except Exception as e:
-                messages.warning(request, f'Advertencia: No se pudieron eliminar algunos archivos temporales: {str(e)}')
+            # Merge conflicts data
+            conflicts_file = "core/src/conflicts.xlsx"
+            intrends_output = "core/src/inTrends.xlsx"
             
-        except Exception as e:
-            messages.error(request, f'Error importing protected file: {str(e)}')
+            if os.path.exists(idtrends_output) and os.path.exists(conflicts_file):
+                merge_conflicts_data(
+                    idtrends_file=idtrends_output,
+                    conflicts_file=conflicts_file,
+                    output_file=intrends_output
+                )
+                messages.success(request, 'Análisis completado: Datos de conflictos fusionados con tendencias.')
+            
+            messages.success(request, 'Proceso completo! Archivo desencriptado y análisis generados exitosamente.')
         
-        return HttpResponseRedirect('/persons/import/')
+        except Exception as e:
+            messages.error(request, f'Error durante el análisis de datos: {str(e)}')
+        
+        # Clean up temporary files
+        try:
+            for file_path in [temp_path, output_excel]:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+        except Exception as e:
+            messages.warning(request, f'Advertencia: No se pudieron eliminar algunos archivos temporales: {str(e)}')
+    
+    except Exception as e:
+        messages.error(request, f'Error importing protected file: {str(e)}')
     
     return HttpResponseRedirect('/persons/import/')
-
-
 
 def import_conflict_excel(request):
     """View for importing conflict data from Excel files"""
@@ -1500,7 +1507,6 @@ import msoffcrypto
 import openpyxl
 import sys
 import os
-import json
 import getpass
 from datetime import datetime
 
@@ -1537,9 +1543,9 @@ def remove_excel_password(input_file, output_file=None):
         log_message(f"Error al procesar el archivo: {str(e)}")
         return False
 
-def add_fk_id_estado(input_file, output_file):
+def add_fk_id_estado(input_file):
     try:
-        wb = openpyxl.load_workbook(input_file, read_only=True)
+        wb = openpyxl.load_workbook(input_file)
         ws = wb.active
         
         # Find header row
@@ -1549,26 +1555,21 @@ def add_fk_id_estado(input_file, output_file):
         if 'fkIdEstado' not in headers:
             headers.append('fkIdEstado')
             fk_col = len(headers)
+            ws.cell(row=1, column=fk_col, value='fkIdEstado')
         else:
             fk_col = headers.index('fkIdEstado') + 1
         
-        # Convert to JSON in chunks
-        data = []
-        chunk_size = 1000
+        # Process all rows
         log_message(f"Total de filas a procesar: {ws.max_row}")
         
-        for row_num, row in enumerate(ws.iter_rows(min_row=2), start=2):
-            if row_num % chunk_size == 0:
+        for row_num in range(2, ws.max_row + 1):
+            if row_num % 1000 == 0:
                 log_message(f"Procesadas {row_num} filas")
-                
-            row_data = {headers[i]: cell.value for i, cell in enumerate(row)}
-            row_data['fkIdEstado'] = 1
-            data.append(row_data)
+            ws.cell(row=row_num, column=fk_col, value=1)
         
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-            
-        log_message(f"Procesadas correctamente {len(data)} filas")
+        # Save the modified Excel file
+        wb.save(input_file)
+        log_message(f"Procesadas correctamente {ws.max_row - 1} filas")
         return True
         
     except Exception as e:
@@ -1589,17 +1590,15 @@ if __name__ == "__main__":
             sys.exit(1)
 
         output_excel_file = "core/src/data.xlsx"
-        output_json_file = "core/src/fk1data.json"
 
         if remove_excel_password(input_excel_file, output_excel_file):
-            if add_fk_id_estado(output_excel_file, output_json_file):
+            if add_fk_id_estado(output_excel_file):
                 log_message("\nPROCESO COMPLETADO EXITOSAMENTE")
-                log_message(f"- Archivo desencriptado: {output_excel_file}")
-                log_message(f"- Archivo JSON generado: {output_json_file}")
+                log_message(f"- Archivo desencriptado y modificado: {output_excel_file}")
             else:
                 log_message("\nPROCESO PARCIALMENTE COMPLETADO")
                 log_message(f"- Archivo desencriptado: {output_excel_file}")
-                log_message("- Falló la generación del archivo JSON")
+                log_message("- Falló la modificación del archivo Excel")
         else:
             log_message("\nPROCESO FALLIDO")
             log_message("- No se pudo desencriptar el archivo de entrada")
