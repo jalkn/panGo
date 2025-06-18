@@ -1608,7 +1608,6 @@ if __name__ == "__main__":
         log_message(f"\nERROR INESPERADO: {str(e)}")
 "@
 
-
 # Create cats.py
 Set-Content -Path "core/cats.py" -Value @"
 import pandas as pd
@@ -2517,19 +2516,14 @@ def calculate_sudden_wealth_increase(df):
     
     return df
 
-def save_results(df, excel_filename="tables/trends/trends.xlsx", json_filename=None):
-    """Save results to Excel and optionally JSON."""
+def save_results(df, excel_filename="tables/trends/trends.xlsx"):
+    """Save results to Excel."""
     try:
         df.to_excel(excel_filename, index=False)
         print(f"Data saved to {excel_filename}")
-        
-        if json_filename:
-            df.to_json(json_filename, orient='records', indent=4, force_ascii=False)
-            print(f"Data saved to {json_filename}")
     except Exception as e:
         print(f"Error saving file: {e}")
 
-# Then modify the main() function to include this calculation:
 def main():
     """Main function to process all data and generate analysis files."""
     try:
@@ -2543,7 +2537,7 @@ def main():
         
         df_worth = calculate_leverage(df_worth)
         df_worth = calculate_debt_level(df_worth)
-        df_worth = calculate_sudden_wealth_increase(df_worth)  # Add this line
+        df_worth = calculate_sudden_wealth_increase(df_worth)
         
         for column in ['Activos', 'Pasivos', 'Patrimonio', 'Apalancamiento', 'Endeudamiento']:
             df_worth = calculate_variation(df_worth, column)
@@ -2564,10 +2558,6 @@ def main():
         
         # Save basic trends
         save_results(df_combined, "core/src/trends.xlsx")
-        
-        # Calculate and save yearly variations
-        df_yearly = calculate_yearly_variations(df_combined)
-        save_results(df_yearly, "core/src/overTrends.xlsx", "core/src/data.json")
         
     except FileNotFoundError as e:
         print(f"Error: Required file not found - {e}")
