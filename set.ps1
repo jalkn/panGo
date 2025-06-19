@@ -589,16 +589,27 @@ def import_persons(request):
     if request.method == 'POST' and request.FILES.get('excel_file'):
         excel_file = request.FILES['excel_file']
         try:
+            # Read the Excel file to validate columns
+            df = pd.read_excel(excel_file)
+            
+            # Check for required columns
+            required_columns = ['NOMBRE COMPLETO', 'Correo', 'Cedula', 'Estado', 'Compania', 'CARGO', 'Activo']
+            missing_cols = [col for col in required_columns if col not in df.columns]
+            
+            if missing_cols:
+                messages.error(request, f'El archivo Excel no tiene las columnas requeridas: {", ".join(missing_cols)}', extra_tags='import_persons')
+                return HttpResponseRedirect('/persons/import/')
+            
             # Save the uploaded file to core/src/Personas.xlsx
             personas_path = "core/src/Personas.xlsx"
             os.makedirs(os.path.dirname(personas_path), exist_ok=True)
-            with open(personas_path, 'wb+') as destination:
-                for chunk in excel_file.chunks():
-                    destination.write(chunk)
             
-            messages.success(request, 'Archivo de personas importado exitosamente!', extra_tags='import_excel')
+            # Save the file with only the required columns
+            df[required_columns].to_excel(personas_path, index=False)
+            
+            messages.success(request, 'Archivo de personas importado exitosamente!', extra_tags='import_persons')
         except Exception as e:
-            messages.error(request, f'Error guardando archivo: {str(e)}', extra_tags='import_excel')
+            messages.error(request, f'Error procesando archivo: {str(e)}', extra_tags='import_persons')
         
         return HttpResponseRedirect('/persons/import/')
     
@@ -608,100 +619,39 @@ def import_persons(request):
         'analysis_results': analysis_results
     })
 
-
-def process_conflict_data():
-    """Process conflict data from inTrends.xlsx and update Conflict model"""
-    try:
-        in_trends_path = "core/src/inTrends.xlsx"
-        
-        if not os.path.exists(in_trends_path):
-            print("inTrends.xlsx file not found")
-            return False
-            
-        df = pd.read_excel(in_trends_path)
-        
-        # Ensure Cedula is string type for comparison
-        df['Cedula'] = df['Cedula'].astype(str)
-        
-        # Replace NaN values in boolean columns with False
-        boolean_columns = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'Q11']
-        for col in boolean_columns:
-            if col in df.columns:
-                df[col] = df[col].fillna(False).astype(bool)
-        
-        for _, row in df.iterrows():
-            try:
-                # Find the person by cedula
-                person = Person.objects.filter(cedula=str(row['Cedula'])).first()
-                if not person:
-                    continue
-                
-                # Handle date field - convert to None if invalid
-                fecha_inicio = row.get('Fecha de Inicio')
-                if pd.isna(fecha_inicio) or fecha_inicio == 'NaT' or fecha_inicio == 'nan':
-                    fecha_inicio = None
-                
-                # Create or update conflict report
-                Conflict.objects.update_or_create(
-                    person=person,
-                    defaults={
-                        'fecha_inicio': fecha_inicio,
-                        'q1': row.get('Q1', False),
-                        'q2': row.get('Q2', False),
-                        'q3': row.get('Q3', False),
-                        'q4': row.get('Q4', False),
-                        'q5': row.get('Q5', False),
-                        'q6': row.get('Q6', False),
-                        'q7': row.get('Q7', False),
-                        'q8': row.get('Q8', False),
-                        'q9': row.get('Q9', False),
-                        'q10': row.get('Q10', False),
-                        'q11': row.get('Q11', False),
-                    }
-                )
-            except Exception as e:
-                print(f"Error processing conflict row for cedula {row['Cedula']}: {str(e)}")
-                continue
-                
-        return True
-        
-    except Exception as e:
-        print(f"Error processing conflict data: {str(e)}")
-        return False
-
-
 def process_persons_data(request):
     """
-    Process data from inTrends.xlsx and update Person model, FinancialReport model, and Conflict model
+    Process data from Personas.xlsx and update Person model
     """
     try:
-        # Path to the inTrends file
-        inTrends_path = "core/src/inTrends.xlsx"
+        # Path to the Personas file
+        personas_path = "core/src/Personas.xlsx"
         
-        if not os.path.exists(inTrends_path):
-            messages.error(request, 'El archivo inTrends.xlsx no existe. Por favor importe los datos primero.')
+        if not os.path.exists(personas_path):
+            messages.error(request, 'El archivo Personas.xlsx no existe. Por favor importe los datos primero.')
             return HttpResponseRedirect('/persons/import/')
             
-        # Read the inTrends file
-        df = pd.read_excel(inTrends_path)
+        # Read the Personas file
+        df = pd.read_excel(personas_path)
         
         # Convert 'nan' strings to actual NaN values
         df.replace('nan', pd.NA, inplace=True)
         
-        # Column mapping from inTrends to Person model
+        # Column mapping from Personas.xlsx to Person model
         column_mapping = {
-            'Cedula': 'cedula',
-            'Nombre': 'nombre_completo',
-            'Cargo': 'cargo',
+            'NOMBRE COMPLETO': 'nombre_completo',
             'Correo': 'correo',
+            'Cedula': 'cedula',
+            'Estado': 'estado',
             'Compania': 'compania',
-            'Estado': 'estado'
+            'CARGO': 'cargo',
+            'Activo': 'revisar'  # Map 'Activo' column to 'revisar' field
         }
         
         # Ensure all required columns exist
         missing_cols = [col for col in column_mapping.keys() if col not in df.columns]
         if missing_cols:
-            messages.error(request, f'El archivo inTrends.xlsx no tiene las columnas requeridas: {", ".join(missing_cols)}')
+            messages.error(request, f'El archivo Personas.xlsx no tiene las columnas requeridas: {", ".join(missing_cols)}')
             return HttpResponseRedirect('/persons/import/')
         
         # Rename columns to match model
@@ -712,8 +662,15 @@ def process_persons_data(request):
         
         # Fill empty values and clean data
         person_df.fillna('', inplace=True)
+        
+        # Convert 'Activo' to boolean for 'revisar' field
+        person_df['revisar'] = person_df['revisar'].apply(
+            lambda x: bool(x) if pd.notna(x) else False
+        )
+        
+        # Standardize estado values
         person_df['estado'] = person_df['estado'].apply(
-            lambda x: x if x in ['Activo', 'Retirado'] else 'Activo'
+            lambda x: 'Activo' if str(x).strip().lower() in ['activo', '1', 'true', 'si'] else 'Retirado'
         )
         
         # Update or create Person records in bulk for better performance
@@ -729,6 +686,8 @@ def process_persons_data(request):
                     'correo': row['correo'],
                     'compania': row['compania'],
                     'estado': row['estado'],
+                    'revisar': row['revisar'],
+                    'comments': ''  # Initialize comments as empty
                 }
             )
             if created:
@@ -736,40 +695,70 @@ def process_persons_data(request):
             else:
                 persons_updated += 1
         
-        # Process financial data and conflicts
-        financial_success = process_financial_data()
-        conflict_success = process_conflict_data()
-        
         # Prepare success message
         msg_parts = []
         if persons_created or persons_updated:
             msg_parts.append(f"{persons_created} nuevas personas creadas, {persons_updated} actualizadas")
         
-        if financial_success:
-            financial_count = FinancialReport.objects.count()
-            msg_parts.append(f"{financial_count} reportes financieros procesados")
-        
-        if conflict_success:
-            conflict_count = Conflict.objects.count()
-            msg_parts.append(f"{conflict_count} conflictos procesados")
-        
         if msg_parts:
-            messages.success(request, 'Datos procesados exitosamente! ' + ', '.join(msg_parts) + '.')
-        
-        if not financial_success:
-            messages.warning(request, 'Hubo un problema procesando los reportes financieros.')
-        
-        if not conflict_success:
-            messages.warning(request, 'Hubo un problema procesando los conflictos.')
+            messages.success(request, 'Datos de personas procesados exitosamente! ' + ', '.join(msg_parts) + '.')
 
     except Exception as e:
-        messages.error(request, f'Error procesando datos: {str(e)}')
-        # Log the full error for debugging
-        import traceback
-        traceback.print_exc()
-    
-    return HttpResponseRedirect('/persons/import/')
+        messages.error(request, f'Error procesando datos de personas: {str(e)}')
+        # Log the full error for
 
+def process_conflict_data():
+    """
+    Process data from inTrends.xlsx and update Conflict model
+    """
+    try:
+        in_trends_path = "core/src/inTrends.xlsx"
+        
+        if not os.path.exists(in_trends_path):
+            print("inTrends.xlsx file not found")
+            return False
+            
+        df = pd.read_excel(in_trends_path)
+        
+        # Ensure Cedula is string type for comparison
+        df['Cedula'] = df['Cedula'].astype(str)
+        
+        for _, row in df.iterrows():
+            try:
+                # Find the person by cedula
+                person = Person.objects.filter(cedula=str(row['Cedula'])).first()
+                if not person:
+                    continue
+                    
+                # Create or update conflict record
+                Conflict.objects.update_or_create(
+                    person=person,
+                    defaults={
+                        'q1': row.get('q1', False),
+                        'q2': row.get('q2', False),
+                        'q3': row.get('q3', False),
+                        'q4': row.get('q4', False),
+                        'q5': row.get('q5', False),
+                        'q6': row.get('q6', False),
+                        'q7': row.get('q7', False),
+                        'q8': row.get('q8', False),
+                        'q9': row.get('q9', False),
+                        'q10': row.get('q10', False),
+                        'q11': row.get('q11', False),
+                        'comments': row.get('comments', ''),
+                        'fecha_inicio': pd.to_datetime(row.get('fecha_inicio'), errors='coerce'),
+                        'fecha_fin': pd.to_datetime(row.get('fecha_fin'), errors='coerce'),
+                    }
+                )
+            except Exception as e:
+                print(f"Error processing conflict for cedula {row['Cedula']}: {str(e)}")
+                continue
+                
+        return True
+        
+    except Exception as e:
+        print(f"Error processing conflict data: {str(e)}")
+        return False
 
 def import_protected_excel(request):
     """
@@ -784,17 +773,13 @@ def import_protected_excel(request):
             # Create necessary directories if they don't exist
             os.makedirs('core/src', exist_ok=True)
             
-            # 1. Save the uploaded file temporarily
+            # Save the uploaded file temporarily
             temp_path = "core/src/dataHistoricaPBI.xlsx"
             with open(temp_path, 'wb+') as destination:
                 for chunk in excel_file.chunks():
                     destination.write(chunk)
             
-            # 2. Process the file using passKey.py functionality
-            from core.passKey import remove_excel_password, add_fk_id_estado
-            
             output_excel = "core/src/data.xlsx"
-            output_json = "core/src/fk1data.json"
             
             # Modified password removal function that works with the view
             def remove_excel_password_browser(input_file, output_file, password):
@@ -825,13 +810,7 @@ def import_protected_excel(request):
                 messages.error(request, f'Error al procesar el archivo protegido: {message}')
                 return HttpResponseRedirect('/persons/import/')
             
-            # 3. Add fkIdEstado and create JSON
-            json_success = add_fk_id_estado(output_excel, output_json)
-            
-            if not json_success:
-                messages.warning(request, 'Archivo desencriptado pero falló la generación del JSON')
-            
-            # 4. Run the full analysis pipeline
+            # Run the full analysis pipeline
             try:
                 # Import the analysis modules
                 from core.cats import run_all_analyses as run_cats_analysis
@@ -915,7 +894,7 @@ def import_protected_excel(request):
             try:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
-                if os.path.exists(output_excel):  # Delete data.xlsx after analysis
+                if os.path.exists(output_excel):  
                     os.remove(output_excel)
             except Exception as e:
                 messages.warning(request, f'Advertencia: No se pudieron eliminar algunos archivos temporales: {str(e)}')
@@ -926,8 +905,6 @@ def import_protected_excel(request):
         return HttpResponseRedirect('/persons/import/')
     
     return HttpResponseRedirect('/persons/import/')
-
-
 
 def import_conflict_excel(request):
     """View for importing conflict data from Excel files"""
@@ -1493,122 +1470,6 @@ urlpatterns = [
     foreach ($dir in $directories) {
         New-Item -Path $dir -ItemType Directory -Force
     }
-
-#Create passkey.py
-Set-Content -Path "core/passKey.py" -Value @"
-import msoffcrypto
-import openpyxl
-import sys
-import os
-import json
-import getpass
-from datetime import datetime
-
-def log_message(message):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] {message}")
-
-def remove_excel_password(input_file, output_file=None):
-    """Handle password protected Excel files"""
-    try:
-        with open(input_file, "rb") as file:
-            office_file = msoffcrypto.OfficeFile(file)
-            
-            # Check if file is encrypted
-            if office_file.is_encrypted():
-                # Prompt for password if encrypted
-                password = getpass.getpass("El archivo está protegido con contrasena: ")
-                try:
-                    office_file.load_key(password=password)
-                except Exception as e:
-                    log_message(f"Error: Contrasena incorrecta")
-                    return False
-            else:
-                # File is not encrypted
-                office_file.load_key(password=None)
-            
-            with open(output_file, "wb") as decrypted:
-                office_file.decrypt(decrypted)
-        
-        log_message(f"Archivo procesado correctamente. Guardado en '{output_file}'")
-        return True
-        
-    except Exception as e:
-        log_message(f"Error al procesar el archivo: {str(e)}")
-        return False
-
-def add_fk_id_estado(input_file, output_file):
-    try:
-        wb = openpyxl.load_workbook(input_file, read_only=True)
-        ws = wb.active
-        
-        # Find header row
-        headers = [cell.value for cell in ws[1]]
-        
-        # Add fkIdEstado if needed
-        if 'fkIdEstado' not in headers:
-            headers.append('fkIdEstado')
-            fk_col = len(headers)
-        else:
-            fk_col = headers.index('fkIdEstado') + 1
-        
-        # Convert to JSON in chunks
-        data = []
-        chunk_size = 1000
-        log_message(f"Total de filas a procesar: {ws.max_row}")
-        
-        for row_num, row in enumerate(ws.iter_rows(min_row=2), start=2):
-            if row_num % chunk_size == 0:
-                log_message(f"Procesadas {row_num} filas")
-                
-            row_data = {headers[i]: cell.value for i, cell in enumerate(row)}
-            row_data['fkIdEstado'] = 1
-            data.append(row_data)
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-            
-        log_message(f"Procesadas correctamente {len(data)} filas")
-        return True
-        
-    except Exception as e:
-        log_message(f"Error: {str(e)}")
-        return False
-
-if __name__ == "__main__":
-    try:
-        input("\nPega el archivo de Excel en la carpeta 'core/src/' y asegúrate de nombrarlo 'dataHistoricaPBI.xlsx'. Presiona Enter cuando estés listo...")
-
-        input_excel_file = "core/src/dataHistoricaPBI.xlsx"
-        if not os.path.exists(input_excel_file):
-            log_message(f"ERROR: No se encontró el archivo '{input_excel_file}'")
-            log_message("Por favor verifica:")
-            log_message("1. Que existe el directorio 'core/src/'")
-            log_message("2. Que el archivo está en 'core/src/'")
-            log_message("3. Que el archivo se llama 'dataHistoricaPBI.xlsx'")
-            sys.exit(1)
-
-        output_excel_file = "core/src/data.xlsx"
-        output_json_file = "core/src/fk1data.json"
-
-        if remove_excel_password(input_excel_file, output_excel_file):
-            if add_fk_id_estado(output_excel_file, output_json_file):
-                log_message("\nPROCESO COMPLETADO EXITOSAMENTE")
-                log_message(f"- Archivo desencriptado: {output_excel_file}")
-                log_message(f"- Archivo JSON generado: {output_json_file}")
-            else:
-                log_message("\nPROCESO PARCIALMENTE COMPLETADO")
-                log_message(f"- Archivo desencriptado: {output_excel_file}")
-                log_message("- Falló la generación del archivo JSON")
-        else:
-            log_message("\nPROCESO FALLIDO")
-            log_message("- No se pudo desencriptar el archivo de entrada")
-    except KeyboardInterrupt:
-        log_message("\nOperación cancelada por el usuario")
-    except Exception as e:
-        log_message(f"\nERROR INESPERADO: {str(e)}")
-"@
-
 
 # Create cats.py
 Set-Content -Path "core/cats.py" -Value @"
@@ -2518,19 +2379,14 @@ def calculate_sudden_wealth_increase(df):
     
     return df
 
-def save_results(df, excel_filename="tables/trends/trends.xlsx", json_filename=None):
-    """Save results to Excel and optionally JSON."""
+def save_results(df, excel_filename="tables/trends/trends.xlsx"):
+    """Save results to Excel."""
     try:
         df.to_excel(excel_filename, index=False)
         print(f"Data saved to {excel_filename}")
-        
-        if json_filename:
-            df.to_json(json_filename, orient='records', indent=4, force_ascii=False)
-            print(f"Data saved to {json_filename}")
     except Exception as e:
         print(f"Error saving file: {e}")
 
-# Then modify the main() function to include this calculation:
 def main():
     """Main function to process all data and generate analysis files."""
     try:
@@ -2544,7 +2400,7 @@ def main():
         
         df_worth = calculate_leverage(df_worth)
         df_worth = calculate_debt_level(df_worth)
-        df_worth = calculate_sudden_wealth_increase(df_worth)  # Add this line
+        df_worth = calculate_sudden_wealth_increase(df_worth)
         
         for column in ['Activos', 'Pasivos', 'Patrimonio', 'Apalancamiento', 'Endeudamiento']:
             df_worth = calculate_variation(df_worth, column)
@@ -2566,9 +2422,7 @@ def main():
         # Save basic trends
         save_results(df_combined, "core/src/trends.xlsx")
         
-        # Calculate and save yearly variations
-        df_yearly = calculate_yearly_variations(df_combined)
-        save_results(df_yearly, "core/src/overTrends.xlsx", "core/src/data.json")
+        # The 'df_yearly' calculation and saving to 'overTrends.xlsx' and 'data.json' have been removed.
         
     except FileNotFoundError as e:
         print(f"Error: Required file not found - {e}")
@@ -2813,8 +2667,6 @@ def extract_specific_columns(input_file, output_file, custom_headers=None):
                         len(str(col))+2,
                         result[col].astype(str).str.len().max()+2
                     )
-            
-            print(f"Success! Output saved to: {output_file}")
         
         else:
             print("Warning: Column J not found in selected columns")
